@@ -5,18 +5,15 @@ function updateHUD(ewData) {
     const calibInst = document.getElementById('calib_instruction');
 
     if (ewData) {
-        // Handle Calibration Status
         if (ewData.allCalibrated) {
             statusDiv.innerHTML = "STATUS: <span style='color:#0f0'>CALIBRATED & TRACKING</span>";
             statusDiv.style.borderColor = "#0f0";
-            calibInst.style.display = "none"; // Hide instructions when done
+            if(calibInst) calibInst.style.display = "none";
         } else {
             statusDiv.innerHTML = "STATUS: <span style='color:orange'>CALIBRATING...</span>";
             statusDiv.style.borderColor = "orange";
-            calibInst.style.display = "block";
         }
 
-        // Update Coordinates
         if (ewData.right) {
             const rColor = ewData.right.calibrated ? "#0f0" : "#ffae00";
             rDiv.innerHTML = `<span style="color:${rColor}">R-ARM: H ${ewData.right.h} | V ${ewData.right.v}</span>`;
@@ -30,23 +27,21 @@ function updateHUD(ewData) {
 
 function drawScene(results, ctx, canvas) {
     if (!results) return;
-
     ctx.save();
-    // 1. Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 2. DRAW THE IMAGE (This is what's missing on your screen)
-    // We draw results.image which is provided by the Pose library
     if (results.image) {
         ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
     }
 
-    // 3. Draw the skeleton overlay
     if (results.poseLandmarks) {
+        // Connectors: 2px thickness (Increased 100%)
         drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, 
-            {color: '#00FF0033', lineWidth: 1});
+            {color: '#00FF0077', lineWidth: 2});
+            
+        // Landmarks: Radius 2 (Increased 100%)
         drawLandmarks(ctx, results.poseLandmarks, 
-            {color: '#FF0000', lineWidth: 0.5, radius: 1});
+            {color: '#FF0000', lineWidth: 1, radius: 2});
     }
     ctx.restore();
 }
