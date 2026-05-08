@@ -12,10 +12,11 @@ const pose = new Pose({locateFile: (file) => {
 }});
 
 pose.setOptions({
-    modelComplexity: 1,
+    modelComplexity: 2, // Heavy Model for better topography
     smoothLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
+    enableSegmentation: false,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
 });
 
 pose.onResults((results) => {
