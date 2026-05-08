@@ -3,7 +3,7 @@ const canvasElement = document.getElementById('output_canvas');
 const canvasCtx = canvasElement.getContext('2d');
 const statusDiv = document.getElementById('status');
 
-// Set canvas internal resolution to match HD
+// Set internal canvas resolution
 canvasElement.width = 1920;
 canvasElement.height = 1080;
 
@@ -11,24 +11,28 @@ const pose = new Pose({locateFile: (file) => {
     return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
 }});
 
-pose.onResults((results) => {
-    const ewData = calculateEWMN(results.poseLandmarks);
-    // Pass ewData as the 4th argument
-    drawScene(results, canvasCtx, canvasElement, ewData);
-    if (ewData) {
-        updateHUD(ewData);
-    }
+pose.setOptions({
+    modelComplexity: 1,
+    smoothLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
 });
 
 pose.onResults((results) => {
-    // This function sends the data to your UI and Engine
-    drawScene(results, canvasCtx, canvasElement);
+    if (!results.image) return;
     
-    if (results.poseLandmarks) {
-        const ewData = calculateEWMN(results.poseLandmarks);
-        if (ewData) {
-            updateHUD(ewData);
-        }
+    // Status update
+    statusDiv.innerHTML = "STATUS: ACTIVE";
+    
+    // Process EWMN Data
+    const ewData = calculateEWMN(results.poseLandmarks);
+    
+    // Render Frame
+    drawScene(results, canvasCtx, canvasElement, ewData);
+    
+    // Update Text HUD
+    if (ewData) {
+        updateHUD(ewData);
     }
 });
 
@@ -40,9 +44,8 @@ const camera = new Camera(videoElement, {
     height: 1080
 });
 
-camera.start().then(() => {
-    console.log("Camera started successfully.");
-}).catch(err => {
-    statusDiv.innerHTML = "STATUS: CAMERA ERROR";
-    console.error(err);
+// Start with error catch
+camera.start().catch(err => {
+    statusDiv.innerHTML = "STATUS: <span style='color:red'>CAMERA ERROR</span>";
+    console.error("Camera failed:", err);
 });
