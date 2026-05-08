@@ -1,3 +1,5 @@
+const canvasElement = document.getElementById('output_canvas');
+const canvasCtx = canvasElement.getContext('2d');
 const videoElement = document.getElementById('input_video');
 const statusDiv = document.getElementById('status');
 
