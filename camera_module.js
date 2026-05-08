@@ -18,7 +18,7 @@ pose.onResults((results) => {
     if (ewData) {
         updateHUD(ewData);
     }
-});});
+});
 
 pose.onResults((results) => {
     // This function sends the data to your UI and Engine
