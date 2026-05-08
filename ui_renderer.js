@@ -1,25 +1,22 @@
 function updateHUD(ewData) {
     const rDiv = document.getElementById('r_hand');
     const lDiv = document.getElementById('l_hand');
-    if (ewData && ewData.right) {
-        rDiv.innerHTML = `R-ARM: H ${ewData.right.h} | V ${ewData.right.v}`;
-    }
-    if (ewData && ewData.left) {
-        lDiv.innerHTML = `L-ARM: H ${ewData.left.h} | V ${ewData.left.v}`;
-    }
-}
+    const statusDiv = document.getElementById('status');
 
-function drawScene(results, ctx, canvas) {
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Background video
-    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
-
-    if (results.poseLandmarks) {
-        // Ultra-thin lines (0.5px or 1px) for professional movement analysis
-        drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF0033', lineWidth: 1});
-        drawLandmarks(ctx, results.poseLandmarks, {color: '#FF0000', lineWidth: 1, radius: 1.5});
+    if (!ewData.right.calibrated || !ewData.left.calibrated) {
+        statusDiv.innerHTML = "STATUS: <span style='color:orange'>CALIBRATING... STAND IN T-POSE</span>";
+        statusDiv.style.border = "1px solid orange";
+    } else {
+        statusDiv.innerHTML = "STATUS: <span style='color:#0f0'>CALIBRATED & TRACKING</span>";
+        statusDiv.style.border = "1px solid #0f0";
     }
-    ctx.restore();
+
+    if (ewData.right) {
+        const rColor = ewData.right.calibrated ? "#0f0" : "#ffae00";
+        rDiv.innerHTML = `<span style="color:${rColor}">R-ARM: H ${ewData.right.h} | V ${ewData.right.v}</span>`;
+    }
+    if (ewData.left) {
+        const lColor = ewData.left.calibrated ? "#0f0" : "#ffae00";
+        lDiv.innerHTML = `<span style="color:${lColor}">L-ARM: H ${ewData.left.h} | V ${ewData.left.v}</span>`;
+    }
 }

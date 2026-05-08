@@ -10,11 +10,13 @@
         #input_video { display: none; } 
         #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
         #hud { 
-            position: absolute; right: 20px; top: 20px; width: 280px;
-            background: rgba(0,0,0,0.8); color: #0f0; padding: 15px; 
-            font-family: 'Courier New', monospace; border: 1px solid #0f0;
+            position: absolute; right: 20px; top: 20px; width: 300px;
+            background: rgba(0,0,0,0.85); color: #0f0; padding: 20px; 
+            font-family: 'Courier New', monospace; border: 2px solid #0f0;
             z-index: 10;
         }
+        .calib-msg { font-size: 0.85em; color: #ffae00; margin: 10px 0; line-height: 1.4; }
+        hr { border: 0; border-top: 1px solid #333; margin: 15px 0; }
     </style>
 </head>
 <body>
@@ -22,11 +24,17 @@
         <video id="input_video"></video>
         <canvas id="output_canvas"></canvas>
         <div id="hud">
-            <h3 style="margin-top:0">EWMN ANALYZER</h3>
-            <div id="r_hand">R-ARM: H - | V -</div>
-            <div id="l_hand">L-ARM: H - | V -</div>
+            <h3 style="margin:0 0 10px 0; border-bottom: 1px solid #0f0;">EWMN ANALYZER</h3>
+            <div id="status" style="font-weight:bold; padding: 5px;">STATUS: INITIALIZING...</div>
+            
+            <div id="calib_instruction" class="calib-msg">
+                <strong>CALIBRATION REQUIRED:</strong><br>
+                Stand 3m back. Hold arms out to sides (H2/H6) parallel to floor.
+            </div>
+
             <hr>
-            <div id="status">STATUS: INITIALIZING...</div>
+            <div id="r_hand" style="font-size: 1.2em; margin-bottom: 5px;">R-ARM: H - | V -</div>
+            <div id="l_hand" style="font-size: 1.2em;">L-ARM: H - | V -</div>
         </div>
     </div>
 
