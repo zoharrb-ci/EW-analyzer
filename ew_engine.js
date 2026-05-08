@@ -1,5 +1,5 @@
 /**
- * EWMN Geometry Engine - High Precision Calibration
+ * EWMN Geometry Engine - Vector Angle & Limb-Length Calibration
  */
 
 let maxLimbLength = { right: 0.1, left: 0.1 };
@@ -23,45 +23,46 @@ function calculateEWMN(landmarks) {
         const start = landmarks[limb.s];
         const end = landmarks[limb.e];
 
-        // 1. Vector components
         const dx = end.x - start.x;
         const dy = end.y - start.y;
         const dz_raw = end.z - start.z;
 
-        // 2. 2D projection length
         const currentLength2D = Math.sqrt(dx * dx + dy * dy);
 
-        // 3. Calibration (T-Pose Capture)
+        // Calibration
         if (currentLength2D > maxLimbLength[limb.name]) {
             maxLimbLength[limb.name] = currentLength2D;
             if (currentLength2D > 0.12) isCalibrated[limb.name] = true;
         }
 
-        // 4. Enhanced Depth Inference (Pythagorean)
         let dz = 0;
         const L = maxLimbLength[limb.name];
         if (L > currentLength2D) {
             dz = Math.sqrt(Math.pow(L, 2) - Math.pow(dx, 2) - Math.pow(dy, 2)) || 0;
         }
-        // Apply directional sign from MediaPipe's Z-axis
         const finalDz = (dz_raw > 0) ? dz : -dz;
 
-        // 5. EWMN VERTICAL (0-4)
-        // Calculating angle from the downward Y-axis
-        let vAngleDeg = Math.atan2(Math.sqrt(dx*dx + finalDz*finalDz), dy) * (180 / Math.PI);
-        let vPos = Math.round(vAngleDeg / 45);
+        // 1. VERTICAL ANGLE (Floor = 0°)
+        // In MediaPipe, Y increases downward. To make Floor 0, we measure 
+        // the angle relative to the downward Y-axis.
+        let vAngleRaw = Math.atan2(-dy, Math.sqrt(dx*dx + finalDz*finalDz)) * (180 / Math.PI);
+        // Normalize: 0 is floor, 90 is horizontal, 180 is ceiling
+        let vAngleNormalized = vAngleRaw + 90; 
+        let vPos = Math.round(vAngleNormalized / 45);
         vPos = Math.max(0, Math.min(4, vPos));
 
-        // 6. EWMN HORIZONTAL (0-7)
-        // atan2(dx, -finalDz) ensures H0 is front (toward camera)
-        let hAngleDeg = Math.atan2(dx, -finalDz) * (180 / Math.PI);
-        let calibratedH = (hAngleDeg + 180) % 360;
-        let hPos = Math.round(calibratedH / 45) % 8;
+        // 2. HORIZONTAL ANGLE (Camera = 0°)
+        let hAngleRaw = Math.atan2(dx, -finalDz) * (180 / Math.PI);
+        let hAngleNormalized = (hAngleRaw + 180) % 360;
+        let hPos = Math.round(hAngleNormalized / 45) % 8;
 
         results[limb.name] = {
             h: hPos,
             v: vPos,
-            calibrated: isCalibrated[limb.name]
+            hDeg: Math.round(hAngleNormalized),
+            vDeg: Math.round(vAngleNormalized),
+            calibrated: isCalibrated[limb.name],
+            points: { start, end } // Passed for coloring
         };
     });
 

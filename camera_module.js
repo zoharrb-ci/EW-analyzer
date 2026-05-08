@@ -11,12 +11,14 @@ const pose = new Pose({locateFile: (file) => {
     return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
 }});
 
-pose.setOptions({
-    modelComplexity: 1, 
-    smoothLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-});
+pose.onResults((results) => {
+    const ewData = calculateEWMN(results.poseLandmarks);
+    // Pass ewData as the 4th argument
+    drawScene(results, canvasCtx, canvasElement, ewData);
+    if (ewData) {
+        updateHUD(ewData);
+    }
+});});
 
 pose.onResults((results) => {
     // This function sends the data to your UI and Engine
