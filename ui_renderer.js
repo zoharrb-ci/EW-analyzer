@@ -4,17 +4,20 @@
  */
 
 // 1. Function to update the text in your HTML HUD
-function updateHUD(ewData) {
+ffunction updateHUD(ewData) {
     const rHandDiv = document.getElementById('r_hand');
+    const lHandDiv = document.getElementById('l_hand');
     const statusDiv = document.getElementById('status');
 
-    if (ewData) {
-        // Display Horizontal (0-7) and Vertical (0-4)
-        rHandDiv.innerHTML = `R-ARM: H ${ewData.h} | V (${ewData.v})`;
-        rHandDiv.style.color = "#0f0"; // Green for active tracking
+    if (ewData && ewData.right && ewData.left) {
+        rHandDiv.innerHTML = `R-ARM: H ${ewData.right.h} | V ${ewData.right.v}`;
+        lHandDiv.innerHTML = `L-ARM: H ${ewData.left.h} | V ${ewData.left.v}`;
+        
+        rHandDiv.style.color = "#0f0";
+        lHandDiv.style.color = "#0f0";
         statusDiv.innerHTML = "STATUS: TRACKING ACTIVE";
     } else {
-        statusDiv.innerHTML = "STATUS: SEARCHING FOR BODY...";
+        statusDiv.innerHTML = "STATUS: SEARCHING...";
         statusDiv.style.color = "orange";
     }
 }
