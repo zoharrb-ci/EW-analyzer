@@ -1,40 +1,34 @@
-// Add this safety check inside your pose.onResults loop
-pose.onResults((results) => {
-    // 1. Check if we have a valid image and landmarks
-    if (!results.image || !results.poseLandmarks) {
-        console.warn("Pose data missing - system idling...");
-        return; 
-    }
+function calculateEWMN(landmarks) {
+    // 1. Establish the "Spine" (V4) as the vertical axis
+    const shoulderMid = {
+        x: (landmarks[11].x + landmarks[12].x) / 2,
+        y: (landmarks[11].y + landmarks[12].y) / 2,
+        z: (landmarks[11].z + landmarks[12].z) / 2
+    };
 
-    // 2. Force Canvas resize to match video stream
-    canvasElement.width = videoElement.videoWidth;
-    canvasElement.height = videoElement.videoHeight;
+    const processLimb = (proximal, distal) => {
+        // Vector relative to the joint
+        const dx = distal.x - proximal.x;
+        const dy = distal.y - proximal.y;
+        const dz = distal.z - proximal.z;
 
-    ctx.save();
-    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    
-    // Draw the background feed
-    ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+        // Calculate Vertical (v): 0 (down) to 4 (up)
+        // dy is inverted in screen space (top is 0)
+        const vRad = Math.atan2(Math.sqrt(dx*dx + dz*dz), -dy); 
+        const vDeg = vRad * (180 / Math.PI);
+        const vPos = Math.round(vDeg / 45); // Standard scale 1=45°
 
-    // 3. Process EWMN Data
-    const landmarks = results.poseLandmarks;
-    const ewData = calculateEWMN(landmarks); // Your calculation function
+        // Calculate Horizontal (h): 0 to 7
+        const hRad = Math.atan2(dz, dx);
+        let hDeg = hRad * (180 / Math.PI);
+        if (hDeg < 0) hDeg += 360;
+        const hPos = Math.round(hDeg / 45) % 8;
 
-    if (ewData) {
-        updateMatrixUI(ewData);   // Updates the HTML table
-        renderVisuals(landmarks, ewData); // Draws V4, H0, and Traces
-    }
-    
-    ctx.restore();
-});
+        return { h: hPos, v: vPos, deg: `${Math.round(hDeg)}°|${Math.round(vDeg)}°` };
+    };
 
-function updateMatrixUI(data) {
-    // Direct DOM manipulation to ensure the table updates
-    document.getElementById('rh').innerText = data.right.h;
-    document.getElementById('rv').innerText = data.right.v;
-    document.getElementById('rd').innerText = `${data.right.hDeg}°|${data.right.vDeg}°`;
-
-    document.getElementById('lh').innerText = data.left.h;
-    document.getElementById('lv').innerText = data.left.v;
-    document.getElementById('ld').innerText = `${data.left.hDeg}°|${data.left.vDeg}°`;
+    return {
+        right: processLimb(landmarks[12], landmarks[16]), // Shoulder to Wrist
+        left: processLimb(landmarks[11], landmarks[15])
+    };
 }
