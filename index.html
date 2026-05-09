@@ -9,46 +9,36 @@
         body { margin: 0; background: #000; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
         canvas { width: 100vw; height: 100vh; transform: scaleX(-1); position: absolute; top: 0; left: 0; }
         #ui-overlay { position: relative; z-index: 10; pointer-events: none; height: 100vh; padding: 20px; }
-        #start-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; transition: transform 0.1s; }
         
-        /* Button Feedback Styles */
-        button { 
-            background: transparent; 
-            border: 1px solid #00ffcc; 
-            color: #00ffcc; 
-            padding: 8px; 
-            cursor: pointer; 
-            flex: 1; 
-            margin: 2px; 
-            transition: all 0.1s ease;
-            outline: none;
-            text-transform: uppercase;
-            font-size: 11px;
+        #start-prompt { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000;
+            font-weight: bold; cursor: pointer; border: none; border-radius: 5px; font-size: 1.2em;
+            transition: transform 0.1s;
         }
+        #start-prompt:active { transform: translate(-50%, -50%) scale(0.95); }
 
-        button:hover { background: rgba(0, 255, 204, 0.1); }
+        .panel { background: rgba(0, 15, 20, 0.9); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
         
-        /* Tactical "Press" Effect */
-        button:active { 
-            transform: scale(0.95); 
-            background: #00ffcc !important; 
-            color: #000 !important; 
-        }
-
-        /* Active Mode Style */
-        .btn-active { 
-            background: #ffcc00 !important; 
-            color: #000 !important; 
-            border-color: #ffcc00 !important; 
-        }
-
-        .panel { background: rgba(0, 10, 15, 0.9); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
+        /* Table Styling */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { font-size: 10px; color: #008888; text-align: left; padding-bottom: 5px; }
         td { padding: 5px 0; font-size: 24px; font-weight: bold; color: #fff; }
+        .unit { font-size: 12px; color: #00ffcc; margin-left: 4px; }
+
+        /* Controls & Buttons */
+        #controls { position: absolute; bottom: 40px; left: 20px; width: 320px; }
+        button { 
+            background: transparent; border: 1px solid #00ffcc; color: #00ffcc; 
+            padding: 10px; cursor: pointer; flex: 1; margin: 2px; 
+            transition: all 0.1s; font-weight: bold; text-transform: uppercase;
+        }
+        button:hover { background: rgba(0, 255, 204, 0.1); }
+        button:active { transform: scale(0.95); background: #00ffcc; color: #000; }
+        .btn-active { background: #ffcc00 !important; color: #000 !important; border-color: #ffcc00 !important; }
+
         .dot { height: 12px; width: 12px; border-radius: 50%; background: #444; display: inline-block; margin-right: 10px; }
         .rec-active { background: #ff0000; box-shadow: 0 0 10px #ff0000; animation: blink 1s infinite; }
-        #controls { position: absolute; bottom: 40px; left: 20px; width: 300px; }
-        
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
@@ -58,21 +48,34 @@
     <button id="start-prompt" onclick="initEngine()">START ANALYZER</button>
 
     <div id="ui-overlay">
-        <div class="panel" style="width: 250px;">
+        <div class="panel" style="width: 280px;">
             <div id="status"><span class="dot" id="rec-dot"></span><span id="status-text">SYSTEM READY</span></div>
             <table>
-                <tr><td style="color:#ff4444; font-size: 14px;">R. ARM</td><td id="rh">-</td><td id="rv">-</td></tr>
-                <tr><td style="color:#ffee00; font-size: 14px;">L. ARM</td><td id="lh">-</td><td id="lv">-</td></tr>
+                <tr><th colspan="3">ORIENTATION DATA</th></tr>
+                <tr>
+                    <td style="color:#ff4444; font-size: 14px; width: 80px;">RIGHT</td>
+                    <td id="rh">H-</td><td id="rv">V-</td>
+                </tr>
+                <tr>
+                    <td style="color:#ffee00; font-size: 14px;">LEFT</td>
+                    <td id="lh">H-</td><td id="lv">V-</td>
+                </tr>
             </table>
-            <div id="raw-angles" style="font-size: 10px; color: #008888; margin-top: 5px;">H_deg | V_deg</div>
+            <div id="raw-angles" style="font-size: 10px; color: #008888; margin-top: 8px; border-top: 1px solid #004444; padding-top: 5px;">
+                R: --°|--° | L: --°|--°
+            </div>
         </div>
 
         <div id="controls" class="panel">
-            <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; font-weight: bold; margin-bottom: 10px;">SPACEWISE MODE</button>
-            <label style="font-size: 10px; color:#00ffcc;">TRACE OPACITY</label>
-            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%; accent-color:#00ffcc;">
+            <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; margin-bottom: 10px; font-size: 14px;">SPACEWISE MODE</button>
+            
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 10px; display: block; margin-bottom: 5px;">PLANE OPACITY</label>
+                <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.4" style="width:100%; accent-color:#00ffcc;">
+            </div>
+
             <div style="display:flex;">
-                <button id="btn-start" onclick="setTracking(true)">START</button>
+                <button id="btn-start" onclick="setTracking(true)">START REC</button>
                 <button id="btn-stop" onclick="setTracking(false)">STOP</button>
                 <button onclick="clearTraces()">RESET</button>
             </div>
@@ -83,15 +86,17 @@
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const ctx = canvasElement.getContext('2d');
+        
         let isTracking = false;
         let currentMode = 'spacewise';
         let rPath = [], lPath = [];
 
-        // --- UI Logic with Feedback ---
+        // --- COORDINATE SYSTEMS & UI ---
         function setTracking(state) {
             isTracking = state;
             document.getElementById('btn-start').classList.toggle('btn-active', state);
             document.getElementById('btn-stop').classList.toggle('btn-active', !state);
+            document.getElementById('rec-dot').className = state ? 'dot rec-active' : 'dot';
         }
 
         function toggleMode() {
@@ -101,73 +106,119 @@
             btn.classList.toggle('btn-active', currentMode === 'bodywise');
         }
 
-        // 1. Initialize Pose
+        function clearTraces() { rPath = []; lPath = []; }
+
+        // --- TRIGONOMETRY ENGINE ---
+        function calculateEWMN(lm) {
+            const process = (p, d, torsoH = 0) => {
+                const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
+                
+                // Vertical: V0 (Down) to V4 (Up)
+                const horizontalDist = Math.sqrt(dx*dx + dz*dz);
+                const vDeg = Math.atan2(horizontalDist, -dy) * (180/Math.PI); 
+                const vPos = Math.max(0, Math.min(4, Math.round(vDeg/45)));
+                
+                // Horizontal
+                let hDeg = Math.atan2(dx, -dz) * (180/Math.PI);
+                if (hDeg < 0) hDeg += 360;
+
+                if (currentMode === 'bodywise') {
+                    hDeg = (hDeg - torsoH + 360) % 360;
+                }
+
+                return { h: Math.round(hDeg/45)%8, v: vPos, degH: Math.round(hDeg), degV: Math.round(vDeg) };
+            };
+
+            const sDX = lm[12].x - lm[11].x;
+            const sDZ = lm[12].z - lm[11].z;
+            let tDeg = Math.atan2(sDX, -sDZ) * (180/Math.PI) + 90;
+            if (tDeg < 0) tDeg += 360;
+
+            return {
+                right: process(lm[12], lm[16], tDeg),
+                left: process(lm[11], lm[15], tDeg),
+                torso: { deg: Math.round(tDeg) }
+            };
+        }
+
+        // --- RENDERING ENGINE ---
+        function drawCompass(joint, color) {
+            const x = joint.x * canvasElement.width;
+            const y = joint.y * canvasElement.height;
+            ctx.save();
+            ctx.globalAlpha = 0.2;
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.ellipse(x, y, 100, 35, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawPlane(path, color) {
+            if (path.length < 2) return;
+            const w = canvasElement.width;
+            const h = canvasElement.height;
+            ctx.save();
+            ctx.fillStyle = color;
+            ctx.globalAlpha = document.getElementById('opacity-slider').value;
+            for (let i = 1; i < path.length; i++) {
+                ctx.beginPath();
+                ctx.moveTo(path[i-1].p.x * w, path[i-1].p.y * h);
+                ctx.lineTo(path[i-1].d.x * w, path[i-1].d.y * h);
+                ctx.lineTo(path[i].d.x * w, path[i].d.y * h);
+                ctx.lineTo(path[i].p.x * w, path[i].p.y * h);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
         const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
 
-        // 2. Define calculation engine
-        function calculateEWMN(lm) {
-            const process = (p, d) => {
-                const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
-                const vDeg = Math.atan2(Math.sqrt(dx*dx + dz*dz), -dy) * (180/Math.PI);
-                const vPos = Math.max(0, Math.min(4, Math.round(vDeg/45)));
-                let hDeg = Math.atan2(dx, -dz) * (180/Math.PI);
-                if (hDeg < 0) hDeg += 360;
-                return { h: Math.round(hDeg/45)%8, v: vPos, raw: `${Math.round(hDeg)}°|${Math.round(vDeg)}°` };
-            };
-            return { right: process(lm[12], lm[16]), left: process(lm[11], lm[15]) };
-        }
-
-        function handleGestures(lm) {
-            if (lm[22].y < lm[21].y - 0.04) setTracking(true); 
-            if (lm[22].y > lm[21].y + 0.04) setTracking(false);
-            if (Math.hypot(lm[15].x - lm[16].x, lm[15].y - lm[16].y) < 0.06) clearTraces();
-        }
-
-        function clearTraces() { rPath = []; lPath = []; }
-
-        // 4. Processing Loop
         pose.onResults((res) => {
             if (!res.poseLandmarks) return;
-            canvasElement.width = window.innerWidth; canvasElement.height = window.innerHeight;
-            ctx.save(); ctx.clearRect(0,0,canvasElement.width, canvasElement.height);
-            ctx.drawImage(res.image, 0,0,canvasElement.width, canvasElement.height);
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+            
+            ctx.save();
+            ctx.clearRect(0,0, canvasElement.width, canvasElement.height);
+            ctx.drawImage(res.image, 0, 0, canvasElement.width, canvasElement.height);
             
             const lm = res.poseLandmarks;
             const data = calculateEWMN(lm);
-            handleGestures(lm);
 
+            // Record Movement Planes
+            if (isTracking) {
+                rPath.push({ p: {x: lm[12].x, y: lm[12].y}, d: {x: lm[16].x, y: lm[16].y} });
+                lPath.push({ p: {x: lm[11].x, y: lm[11].y}, d: {x: lm[15].x, y: lm[15].y} });
+            }
+
+            // Visual Scaffolding
+            drawCompass(lm[12], '#00ffcc');
+            drawCompass(lm[11], '#00ffcc');
+            drawPlane(rPath, '#ff4444');
+            drawPlane(lPath, '#ffee00');
+
+            // Current Limb Vectors
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#ff4444';
+            ctx.beginPath(); ctx.moveTo(lm[12].x*canvasElement.width, lm[12].y*canvasElement.height); ctx.lineTo(lm[16].x*canvasElement.width, lm[16].y*canvasElement.height); ctx.stroke();
+            ctx.strokeStyle = '#ffee00';
+            ctx.beginPath(); ctx.moveTo(lm[11].x*canvasElement.width, lm[11].y*canvasElement.height); ctx.lineTo(lm[15].x*canvasElement.width, lm[15].y*canvasElement.height); ctx.stroke();
+
+            // Update UI
             document.getElementById('rh').innerText = `H${data.right.h}`;
             document.getElementById('rv').innerText = `V${data.right.v}`;
             document.getElementById('lh').innerText = `H${data.left.h}`;
             document.getElementById('lv').innerText = `V${data.left.v}`;
-            document.getElementById('raw-angles').innerText = `R: ${data.right.raw} | L: ${data.left.raw}`;
-            document.getElementById('rec-dot').className = isTracking ? 'dot rec-active' : 'dot';
-
-            if (isTracking) {
-                rPath.push({x: lm[16].x * canvasElement.width, y: lm[16].y * canvasElement.height});
-                lPath.push({x: lm[15].x * canvasElement.width, y: lm[15].y * canvasElement.height});
-            }
-
-            ctx.globalAlpha = document.getElementById('opacity-slider').value;
-            ctx.lineWidth = 4; ctx.lineCap = 'round';
-            const drawP = (path, color) => { 
-                if(path.length < 2) return; 
-                ctx.beginPath(); ctx.strokeStyle = color; 
-                ctx.moveTo(path[0].x, path[0].y); 
-                for(let pt of path) ctx.lineTo(pt.x, pt.y); ctx.stroke(); 
-            };
-            drawP(rPath, '#ff4444'); drawP(lPath, '#ffee00');
-            
-            ctx.globalAlpha = 1; ctx.lineWidth = 6;
-            ctx.strokeStyle = '#ff4444'; ctx.beginPath(); ctx.moveTo(lm[12].x*canvasElement.width, lm[12].y*canvasElement.height); ctx.lineTo(lm[16].x*canvasElement.width, lm[16].y*canvasElement.height); ctx.stroke();
-            ctx.strokeStyle = '#ffee00'; ctx.beginPath(); ctx.moveTo(lm[11].x*canvasElement.width, lm[11].y*canvasElement.height); ctx.lineTo(lm[15].x*canvasElement.width, lm[15].y*canvasElement.height); ctx.stroke();
+            document.getElementById('raw-angles').innerText = `R: ${data.right.degH}°|${data.right.degV}° | L: ${data.left.degH}°|${data.left.degV}°`;
             ctx.restore();
         });
 
-        const camera = new Camera(videoElement, { 
-            onFrame: async () => { await pose.send({image: videoElement}); }, 
-            width: 1280, height: 720 
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await pose.send({image: videoElement}); },
+            width: 1280, height: 720
         });
 
         function initEngine() {

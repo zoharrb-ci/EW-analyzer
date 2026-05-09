@@ -1,74 +1,62 @@
 /**
- * UI_RENDERER.JS - Plane Compass & Scaffolding
+ * UI_RENDERER.JS - Movement Plane Visualization
  */
 const canvas = document.getElementById('output_canvas');
 const ctx = canvas.getContext('2d');
 
-window.drawScene = function(res, data) {
-    const lm = res.poseLandmarks;
+function drawMovementPlane(path, color) {
+    if (path.length < 2) return;
     const w = canvas.width;
     const h = canvas.height;
 
-    ctx.save();
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(res.image, 0, 0, w, h);
-
-    // 1. Draw Plane Compass (Around Right Shoulder)
-    drawPlaneCompass(ctx, lm[12], data.right.h, w, h);
-
-    // 2. Draw Body-wise 0 Arrow
-    drawBodyZero(ctx, lm, data.torso.deg, w, h);
-
-    // 3. Render Limb Vectors & Traces (Standard Logic)
-    // ... [Previous tracing and limb drawing code goes here] ...
-
-    ctx.restore();
-};
-
-function drawPlaneCompass(ctx, joint, hVal, w, h) {
-    const x = joint.x * w;
-    const y = joint.y * h;
-    const radius = 100;
-
-    // A. Horizontal Plane (H) - Semi-transparent Disk
     ctx.beginPath();
-    ctx.globalAlpha = 0.2;
-    ctx.fillStyle = '#00ffcc';
-    ctx.ellipse(x, y, radius, radius/3, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.globalAlpha = document.getElementById('opacity-slider').value * 0.5;
 
-    // B. Vertical Plane (V) - Vertical Arc
-    ctx.beginPath();
-    ctx.globalAlpha = 0.4;
-    ctx.strokeStyle = '#ffee00';
-    ctx.lineWidth = 2;
-    ctx.arc(x, y, radius, -Math.PI/2, Math.PI/2);
-    ctx.stroke();
+    for (let i = 1; i < path.length; i++) {
+        const prev = path[i-1];
+        const curr = path[i];
 
-    ctx.globalAlpha = 1.0;
-}
-
-function drawBodyZero(ctx, lm, torsoDeg, w, h) {
-    const centerX = (lm[23].x + lm[24].x)/2 * w;
-    const centerY = (lm[23].y + lm[24].y)/2 * h + 40;
-
-    ctx.save();
-    ctx.translate(centerX, centerY);
-    
-    // If Spacewise, the arrow is fixed to the camera (down on screen)
-    // If Bodywise, the arrow rotates with the torsoDeg
-    if (window.mode === 'bodywise') {
-        ctx.rotate((torsoDeg - 90) * Math.PI / 180);
+        // Draw a polygon between the two limb lines
+        ctx.moveTo(prev.p.x * w, prev.p.y * h);
+        ctx.lineTo(prev.d.x * w, prev.d.y * h);
+        ctx.lineTo(curr.d.x * w, curr.d.y * h);
+        ctx.lineTo(curr.p.x * w, curr.p.y * h);
+        ctx.closePath();
     }
-
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, 60); // Direction Indicator
-    ctx.stroke();
+    ctx.fill();
     
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText("FRONT (0)", -25, 75);
-    ctx.restore();
+    // Draw the "ribbon" edges for clarity
+    ctx.globalAlpha = 1.0;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = color;
+    ctx.stroke();
 }
+
+pose.onResults((res) => {
+    if (!res.poseLandmarks) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    ctx.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(res.image, 0, 0, canvas.width, canvas.height);
+
+    const lm = res.poseLandmarks;
+    const data = calculateEWMN(lm);
+    
+    // 1. Draw the history planes
+    drawMovementPlane(window.rPath, '#ff4444'); // Red Plane
+    drawMovementPlane(window.lPath, '#ffee00'); // Yellow Plane
+
+    // 2. Draw current limb axis (The "leading edge")
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#ff4444';
+    ctx.beginPath();
+    ctx.moveTo(lm[12].x * canvas.width, lm[12].y * canvas.height);
+    ctx.lineTo(lm[16].x * canvas.width, lm[16].y * canvas.height);
+    ctx.stroke();
+
+    ctx.restore();
+    updateHUD(data); // Assume updateHUD exists from previous versions
+});

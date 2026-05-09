@@ -1,49 +1,23 @@
 /**
- * EW_ENGINE.JS - Logic, Audio, and Coordination Modes
+ * EW_ENGINE.JS - Plane-Tracing Logic
  */
-window.isTracking = false;
 window.mode = 'spacewise'; 
-window.rPath = [];
+window.isTracking = false; 
+window.rPath = []; // Now stores objects with {proximal, distal}
 window.lPath = [];
-window.showCompass = true; // Ensure compass is enabled by default
-
-// Audio Setup
-window.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let lastValues = { rh: -1, rv: -1, lh: -1, lv: -1, th: -1 };
-
-function playTick() {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime); 
-    gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.05);
-}
 
 window.calculateEWMN = function(lm) {
-    const process = (p, d, torsoDeg = 0) => {
+    const process = (p, d, torsoH = 0) => {
         const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
-        
-        // VERTICAL FIX: 
-        // MediaPipe Y is positive DOWN. 
-        // To make Down=V0 (0°) and Up=V4 (180°):
-        // We use atan2(horizontal_dist, -dy). 
-        // When pointing down, -dy is negative, atan2 gives 0.
         const horizontalDist = Math.sqrt(dx*dx + dz*dz);
         const vDeg = Math.atan2(horizontalDist, -dy) * (180/Math.PI); 
         const vPos = Math.max(0, Math.min(4, Math.round(vDeg/45)));
         
-        // HORIZONTAL
         let hDeg = Math.atan2(dx, -dz) * (180/Math.PI);
         if (hDeg < 0) hDeg += 360;
 
         if (window.mode === 'bodywise') {
-            hDeg = (hDeg - torsoDeg + 360) % 360;
+            hDeg = (hDeg - torsoH + 360) % 360;
         }
 
         return { h: Math.round(hDeg/45)%8, v: vPos, degH: Math.round(hDeg), degV: Math.round(vDeg) };
@@ -60,22 +34,20 @@ window.calculateEWMN = function(lm) {
         torso: { h: Math.round(tDeg/45)%8, deg: Math.round(tDeg) }
     };
 
-    if (data.right.h !== lastValues.rh || data.right.v !== lastValues.rv) {
-        playTick();
-        lastValues.rh = data.right.h; lastValues.rv = data.right.v;
+    // Store the full axis line for plane creation
+    if (window.isTracking) {
+        window.rPath.push({
+            p: {x: lm[12].x, y: lm[12].y}, 
+            d: {x: lm[16].x, y: lm[16].y}
+        });
+        window.lPath.push({
+            p: {x: lm[11].x, y: lm[11].y}, 
+            d: {x: lm[15].x, y: lm[15].y}
+        });
     }
 
     return data;
 };
 
-window.toggleMode = function() {
-    window.mode = (window.mode === 'spacewise') ? 'bodywise' : 'spacewise';
-    const btn = document.getElementById('mode-toggle');
-    
-    // Response Indication (Visual Feedback)
-    btn.style.transform = "scale(0.95)";
-    setTimeout(() => btn.style.transform = "scale(1)", 100);
-    
-    btn.innerText = window.mode.toUpperCase() + " MODE";
-    btn.className = window.mode === 'bodywise' ? 'btn-active' : '';
-};
+// Removed handleGestures function entirely
+window.clearTraces = () => { window.rPath = []; window.lPath = []; };
