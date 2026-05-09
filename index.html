@@ -36,15 +36,15 @@
         </div>
 
         <div id="controls" class="panel">
-            <label style="font-size: 10px;">TRACE OPACITY</label>
-            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%; accent-color:#00ffcc;">
-            <div style="display:flex;">
-                <button onclick="isTracking = true">START</button>
-                <button onclick="isTracking = false">STOP</button>
-                <button onclick="clearTraces()">RESET</button>
-            </div>
-        </div>
+    <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; font-weight: bold; margin-bottom: 10px;">SPACEWISE MODE</button>
+    <label style="font-size: 10px;">TRACE OPACITY</label>
+    <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%;">
+    <div style="display:flex;">
+        <button onclick="isTracking = true">START</button>
+        <button onclick="isTracking = false">STOP</button>
+        <button onclick="clearTraces()">RESET</button>
     </div>
+</div>
 
     <script>
         const videoElement = document.getElementById('input_video');

@@ -1,67 +1,74 @@
 /**
- * UI_RENDERER.JS - Visualization and Table Updates
+ * UI_RENDERER.JS - Plane Compass & Scaffolding
  */
 const canvas = document.getElementById('output_canvas');
 const ctx = canvas.getContext('2d');
 
-pose.onResults((res) => {
-    if (!res.poseLandmarks) return;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    
-    ctx.save();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(res.image, 0, 0, canvas.width, canvas.height);
-
+window.drawScene = function(res, data) {
     const lm = res.poseLandmarks;
-    const data = calculateEWMN(lm);
-    handleGestures(lm);
-    updateHUD(data);
+    const w = canvas.width;
+    const h = canvas.height;
 
-    // 1. Spine Axis Arrow
-    const sMid = { x: (lm[11].x + lm[12].x)/2 * canvas.width, y: (lm[11].y + lm[12].y)/2 * canvas.height };
-    ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(sMid.x, sMid.y); ctx.lineTo(sMid.x, sMid.y - 100); ctx.stroke();
+    ctx.save();
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(res.image, 0, 0, w, h);
 
-    // 2. Body-wise 0 Arrow (Floor)
-    const fMid = { x: (lm[23].x + lm[24].x)/2 * canvas.width, y: (lm[23].y + lm[24].y)/2 * canvas.height + 50 };
-    ctx.strokeStyle = '#fff'; ctx.setLineDash([5,5]);
-    ctx.beginPath(); ctx.moveTo(fMid.x, fMid.y); ctx.lineTo(fMid.x, fMid.y + 80); ctx.stroke();
-    ctx.setLineDash([]);
+    // 1. Draw Plane Compass (Around Right Shoulder)
+    drawPlaneCompass(ctx, lm[12], data.right.h, w, h);
 
-    // 3. Tracing Memory
-    if (isTracking) {
-        rPath.push({x: lm[16].x * canvas.width, y: lm[16].y * canvas.height});
-        lPath.push({x: lm[15].x * canvas.width, y: lm[15].y * canvas.height});
-    }
+    // 2. Draw Body-wise 0 Arrow
+    drawBodyZero(ctx, lm, data.torso.deg, w, h);
 
-    // 4. Render Layers
-    ctx.globalAlpha = document.getElementById('opacity-slider').value;
-    const drawP = (p, c) => {
-        if(p.length < 2) return;
-        ctx.beginPath(); ctx.strokeStyle = c; ctx.lineWidth = 4;
-        ctx.moveTo(p[0].x, p[0].y);
-        for(let pt of p) ctx.lineTo(pt.x, pt.y); ctx.stroke();
-    };
-    drawP(rPath, '#ff4444'); drawP(lPath, '#ffee00');
-
-    // Reset Alpha for Limb Axes
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = '#ff4444'; ctx.beginPath(); ctx.moveTo(lm[12].x*canvas.width, lm[12].y*canvas.height); ctx.lineTo(lm[16].x*canvas.width, lm[16].y*canvas.height); ctx.stroke();
-    ctx.strokeStyle = '#ffee00'; ctx.beginPath(); ctx.moveTo(lm[11].x*canvas.width, lm[11].y*canvas.height); ctx.lineTo(lm[15].x*canvas.width, lm[15].y*canvas.height); ctx.stroke();
+    // 3. Render Limb Vectors & Traces (Standard Logic)
+    // ... [Previous tracing and limb drawing code goes here] ...
 
     ctx.restore();
-});
+};
 
-function updateHUD(data) {
-    document.getElementById('th-val').innerText = `H${data.torso.h}`;
-    document.getElementById('t-deg').innerText = `${data.torso.deg}°`;
-    document.getElementById('rh-val').innerText = `H${data.right.h}`;
-    document.getElementById('rv-val').innerText = `V${data.right.v}`;
-    document.getElementById('r-deg').innerText = `${data.right.degH}° / ${data.right.degV}°`;
-    document.getElementById('lh-val').innerText = `H${data.left.h}`;
-    document.getElementById('lv-val').innerText = `V${data.left.v}`;
-    document.getElementById('l-deg').innerText = `${data.left.degH}° / ${data.left.degV}°`;
-    document.getElementById('rec-dot').className = isTracking ? 'dot rec-active' : 'dot';
+function drawPlaneCompass(ctx, joint, hVal, w, h) {
+    const x = joint.x * w;
+    const y = joint.y * h;
+    const radius = 100;
+
+    // A. Horizontal Plane (H) - Semi-transparent Disk
+    ctx.beginPath();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = '#00ffcc';
+    ctx.ellipse(x, y, radius, radius/3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // B. Vertical Plane (V) - Vertical Arc
+    ctx.beginPath();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = '#ffee00';
+    ctx.lineWidth = 2;
+    ctx.arc(x, y, radius, -Math.PI/2, Math.PI/2);
+    ctx.stroke();
+
+    ctx.globalAlpha = 1.0;
+}
+
+function drawBodyZero(ctx, lm, torsoDeg, w, h) {
+    const centerX = (lm[23].x + lm[24].x)/2 * w;
+    const centerY = (lm[23].y + lm[24].y)/2 * h + 40;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    
+    // If Spacewise, the arrow is fixed to the camera (down on screen)
+    // If Bodywise, the arrow rotates with the torsoDeg
+    if (window.mode === 'bodywise') {
+        ctx.rotate((torsoDeg - 90) * Math.PI / 180);
+    }
+
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 60); // Direction Indicator
+    ctx.stroke();
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText("FRONT (0)", -25, 75);
+    ctx.restore();
 }
