@@ -13,22 +13,27 @@
         #start-prompt { 
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000;
-            font-weight: bold; cursor: pointer; border: none; border-radius: 5px; transition: transform 0.1s;
+            font-weight: bold; cursor: pointer; border: none; border-radius: 5px; font-size: 1.2em;
+            transition: transform 0.1s;
         }
+        #start-prompt:active { transform: translate(-50%, -50%) scale(0.95); }
 
         .panel { background: rgba(0, 15, 20, 0.9); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
         #controls { position: absolute; bottom: 40px; left: 20px; width: 320px; }
         
-        table { width: 100%; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         td { padding: 5px 0; font-size: 24px; font-weight: bold; color: #fff; }
-        
+        th { font-size: 10px; color: #008888; text-align: left; padding-bottom: 5px; }
+
         button { 
             background: transparent; border: 1px solid #00ffcc; color: #00ffcc; 
-            padding: 10px; cursor: pointer; flex: 1; margin: 2px; transition: all 0.1s; 
+            padding: 10px; cursor: pointer; flex: 1; margin: 2px; 
+            transition: all 0.1s; font-weight: bold; text-transform: uppercase;
         }
+        button:hover { background: rgba(0, 255, 204, 0.1); }
         button:active { transform: scale(0.95); background: #00ffcc; color: #000; }
         .btn-active { background: #ffcc00 !important; color: #000 !important; border-color: #ffcc00 !important; }
-        
+
         .dot { height: 12px; width: 12px; border-radius: 50%; background: #444; display: inline-block; margin-right: 10px; }
         .rec-active { background: #ff0000; box-shadow: 0 0 10px #ff0000; animation: blink 1s infinite; }
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
@@ -43,15 +48,23 @@
         <div class="panel" style="width: 280px;">
             <div id="status"><span class="dot" id="rec-dot"></span><span id="status-text">SYSTEM READY</span></div>
             <table>
-                <tr><td style="color:#ff4444; font-size: 14px;">RIGHT</td><td id="rh">H-</td><td id="rv">V-</td></tr>
+                <tr><th colspan="3">ORIENTATION DATA</th></tr>
+                <tr><td style="color:#ff4444; font-size: 14px; width: 80px;">RIGHT</td><td id="rh">H-</td><td id="rv">V-</td></tr>
                 <tr><td style="color:#ffee00; font-size: 14px;">LEFT</td><td id="lh">H-</td><td id="lv">V-</td></tr>
             </table>
-            <div id="raw-angles" style="font-size: 10px; color: #008888; margin-top: 5px;">R: -- | L: --</div>
+            <div id="raw-angles" style="font-size: 10px; color: #008888; margin-top: 8px; border-top: 1px solid #004444; padding-top: 5px;">
+                R: -- | L: --
+            </div>
         </div>
 
         <div id="controls" class="panel">
-            <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; margin-bottom: 10px;">SPACEWISE MODE</button>
-            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.4" style="width:100%; margin-bottom:10px;">
+            <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; margin-bottom: 10px; font-size: 14px;">SPACEWISE MODE</button>
+            
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 10px; display: block; margin-bottom: 5px;">PLANE OPACITY</label>
+                <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.4" style="width:100%; accent-color:#00ffcc;">
+            </div>
+
             <div style="display:flex;">
                 <button id="btn-start" onclick="setTracking(true)">START REC</button>
                 <button id="btn-stop" onclick="setTracking(false)">STOP</button>
@@ -60,23 +73,101 @@
         </div>
     </div>
 
-    <script src="ew_engine.js"></script>
-    <script src="ui_renderer.js"></script>
     <script>
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const ctx = canvasElement.getContext('2d');
+        
+        let isTracking = false;
+        let currentMode = 'spacewise';
+        let rPath = [], lPath = [];
 
+        // --- 1. CORE LOGIC ---
+        function toggleMode() {
+            currentMode = (currentMode === 'spacewise') ? 'bodywise' : 'spacewise';
+            const btn = document.getElementById('mode-toggle');
+            btn.innerText = currentMode.toUpperCase() + " MODE";
+            btn.classList.toggle('btn-active', currentMode === 'bodywise');
+        }
+
+        function setTracking(state) {
+            isTracking = state;
+            document.getElementById('btn-start').classList.toggle('btn-active', state);
+            document.getElementById('btn-stop').classList.toggle('btn-active', !state);
+            document.getElementById('rec-dot').className = state ? 'dot rec-active' : 'dot';
+        }
+
+        function clearTraces() { rPath = []; lPath = []; }
+
+        function calculateEWMN(lm) {
+            const process = (p, d, torsoH = 0) => {
+                const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
+                const horizontalDist = Math.sqrt(dx*dx + dz*dz);
+                const vDeg = Math.atan2(horizontalDist, -dy) * (180/Math.PI); 
+                const vPos = Math.max(0, Math.min(4, Math.round(vDeg/45)));
+                let hDeg = Math.atan2(dx, -dz) * (180/Math.PI);
+                if (hDeg < 0) hDeg += 360;
+                if (currentMode === 'bodywise') hDeg = (hDeg - torsoH + 360) % 360;
+                return { h: Math.round(hDeg/45)%8, v: vPos, degH: Math.round(hDeg), degV: Math.round(vDeg) };
+            };
+            const tDX = lm[12].x - lm[11].x, tDZ = lm[12].z - lm[11].z;
+            let tDeg = Math.atan2(tDX, -tDZ) * (180/Math.PI) + 90;
+            return {
+                right: process(lm[12], lm[16], tDeg),
+                left: process(lm[11], lm[15], tDeg),
+                torso: { deg: Math.round(tDeg) }
+            };
+        }
+
+        // --- 2. RENDERING ENGINE ---
+        function drawContourCompass(joint, color, torsoDeg = 0) {
+            const x = joint.x * canvasElement.width;
+            const y = joint.y * canvasElement.height;
+            const radius = 100;
+            ctx.save();
+            ctx.translate(x, y);
+            if (currentMode === 'bodywise') ctx.rotate((torsoDeg - 90) * Math.PI / 180);
+
+            ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.4;
+            ctx.beginPath(); ctx.ellipse(0, 0, radius, radius/2.5, 0, 0, Math.PI * 2); ctx.stroke();
+
+            ctx.font = "bold 12px Courier New"; ctx.fillStyle = color; ctx.textAlign = "center";
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * 45 * Math.PI / 180) + Math.PI/2;
+                const lineX = Math.cos(angle) * radius, lineY = Math.sin(angle) * (radius/2.5);
+                ctx.globalAlpha = 0.2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(lineX, lineY); ctx.stroke();
+                ctx.globalAlpha = 0.8;
+                ctx.fillText(i, Math.cos(angle)*(radius+18), Math.sin(angle)*(radius/2.5+10));
+            }
+            ctx.restore();
+        }
+
+        function drawShadedPlane(path, colorRGB, opacity) {
+            if (path.length < 2) return;
+            const w = canvasElement.width, h = canvasElement.height;
+            ctx.save();
+            for (let i = 1; i < path.length; i++) {
+                const p1 = path[i-1], p2 = path[i];
+                const grad = ctx.createLinearGradient(p2.p.x*w, p2.p.y*h, p2.d.x*w, p2.d.y*h);
+                grad.addColorStop(0, `rgba(${colorRGB}, 0)`); // Shoulder: Transparent
+                grad.addColorStop(1, `rgba(${colorRGB}, ${opacity})`); // Wrist: Solid
+                ctx.beginPath(); ctx.fillStyle = grad;
+                ctx.moveTo(p1.p.x*w, p1.p.y*h); ctx.lineTo(p1.d.x*w, p1.d.y*h);
+                ctx.lineTo(p2.d.x*w, p2.d.y*h); ctx.lineTo(p2.p.x*w, p2.p.y*h);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        // --- 3. EXECUTION ---
         const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
         pose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
 
         pose.onResults((res) => {
             if (!res.poseLandmarks) return;
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
-            
+            canvasElement.width = window.innerWidth; canvasElement.height = window.innerHeight;
             ctx.save();
-            ctx.clearRect(0,0, canvasElement.width, canvasElement.height);
+            ctx.clearRect(0,0, canvas.width, canvas.height);
             ctx.drawImage(res.image, 0, 0, canvasElement.width, canvasElement.height);
             
             const lm = res.poseLandmarks;
@@ -87,14 +178,19 @@
                 lPath.push({ p: {x: lm[11].x, y: lm[11].y}, d: {x: lm[15].x, y: lm[15].y} });
             }
 
-            drawCompass(ctx, lm[12], canvasElement.width, canvasElement.height, '#00ffcc', data.torso.deg);
-            drawCompass(ctx, lm[11], canvasElement.width, canvasElement.height, '#00ffcc', data.torso.deg);
+            drawContourCompass(lm[12], '#00ffcc', data.torso.deg);
+            drawContourCompass(lm[11], '#00ffcc', data.torso.deg);
             
             const opacity = document.getElementById('opacity-slider').value;
-            drawMovementPlane(ctx, rPath, canvasElement.width, canvasElement.height, '#ff4444', opacity);
-            drawMovementPlane(ctx, lPath, canvasElement.width, canvasElement.height, '#ffee00', opacity);
+            drawShadedPlane(rPath, "255, 68, 68", opacity);
+            drawShadedPlane(lPath, "255, 238, 0", opacity);
 
-            // Update HUD
+            // Leading Edges
+            ctx.lineWidth = 4; ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#ff4444'; ctx.beginPath(); ctx.moveTo(lm[12].x*canvasElement.width, lm[12].y*canvasElement.height); ctx.lineTo(lm[16].x*canvasElement.width, lm[16].y*canvasElement.height); ctx.stroke();
+            ctx.strokeStyle = '#ffee00'; ctx.beginPath(); ctx.moveTo(lm[11].x*canvasElement.width, lm[11].y*canvasElement.height); ctx.lineTo(lm[15].x*canvasElement.width, lm[15].y*canvasElement.height); ctx.stroke();
+
+            // HUD
             document.getElementById('rh').innerText = `H${data.right.h}`;
             document.getElementById('rv').innerText = `V${data.right.v}`;
             document.getElementById('lh').innerText = `H${data.left.h}`;
@@ -102,22 +198,6 @@
             document.getElementById('raw-angles').innerText = `R: ${data.right.degH}°|${data.right.degV}° L: ${data.left.degH}°|${data.left.degV}°`;
             ctx.restore();
         });
-
-        function toggleMode() {
-            window.mode = (window.mode === 'spacewise') ? 'bodywise' : 'spacewise';
-            const btn = document.getElementById('mode-toggle');
-            btn.innerText = window.mode.toUpperCase() + " MODE";
-            btn.classList.toggle('btn-active', window.mode === 'bodywise');
-        }
-
-        function setTracking(state) {
-            window.isTracking = state;
-            document.getElementById('btn-start').classList.toggle('btn-active', state);
-            document.getElementById('btn-stop').classList.toggle('btn-active', !state);
-            document.getElementById('rec-dot').className = state ? 'dot rec-active' : 'dot';
-        }
-
-        function clearTraces() { window.rPath = []; window.lPath = []; }
 
         const camera = new Camera(videoElement, {
             onFrame: async () => { await pose.send({image: videoElement}); },
