@@ -2,104 +2,142 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>EWMN Dynamic Analyzer</title>
+    <title>EWMN Researcher - Tracing & Control</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
     <style>
-        body { margin: 0; background: #0a0a0a; color: #00ffcc; font-family: monospace; }
-        canvas { width: 100vw; height: 100vh; transform: scaleX(-1); }
-        #ui-layer { position: absolute; top: 20px; left: 20px; pointer-events: none; }
-        .stats-panel { background: rgba(0,20,20,0.8); border: 1px solid #00ffcc; padding: 15px; border-radius: 5px; width: 250px; }
-        .val { color: white; font-weight: bold; font-size: 1.2em; }
-        #recalibrate-flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; background: rgba(255,0,0,0.5); padding: 10px; display: none; }
+        body { margin: 0; background: #000; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
+        canvas { width: 100vw; height: 100vh; transform: scaleX(-1); position: absolute; }
+        
+        /* UI OVERLAY */
+        #controls { position: absolute; bottom: 30px; left: 30px; width: 300px; z-index: 20; background: rgba(0,20,25,0.85); border: 1px solid #00ffcc; padding: 15px; border-radius: 4px; }
+        .control-group { margin-bottom: 15px; }
+        label { display: block; font-size: 10px; margin-bottom: 5px; color: #888; }
+        
+        input[type=range] { width: 100%; cursor: pointer; accent-color: #00ffcc; }
+        button { background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 5px 10px; cursor: pointer; margin-right: 5px; font-family: inherit; font-size: 11px; }
+        button:hover { background: #00ffcc; color: #000; }
+        button.active { background: #ff4444; color: #fff; border-color: #ff4444; }
+
+        #status-indicator { position: absolute; top: 20px; left: 20px; font-size: 12px; display: flex; align-items: center; }
+        .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; background: #555; }
+        .dot.rec { background: #ff0000; box-shadow: 0 0 10px #ff0000; animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div id="ui-layer">
-    <div class="stats-panel">
-        <div style="font-size: 10px; opacity: 0.7;">DYNAMIC SoR STATUS</div>
-        <div id="tracking-status">INITIATING...</div>
-        <hr style="border: 0; border-top: 1px solid #004444; margin: 10px 0;">
-        <div>SCALE: <span id="scale-val" class="val">1.00</span></div>
-        <div>RIGHT: <span id="r-val" class="val">--</span></div>
-        <div>LEFT: <span id="l-val" class="val">--</span></div>
-    </div>
-</div>
-
-<div id="recalibrate-flash">DISTANCE WARNING: SUBJECT TOO CLOSE</div>
 <canvas id="output_canvas"></canvas>
-<video id="input_video" style="display:none;"></video>
+<div id="status-indicator"><span class="dot" id="rec-dot"></span> <span id="status-text">WAITING FOR GESTURE...</span></div>
+
+<div id="controls">
+    <div class="control-group">
+        <label>TRACE TRANSPARENCY</label>
+        <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.5">
+    </div>
+    <div class="control-group">
+        <button id="btn-trace" onclick="toggleTrace()">START TRACING</button>
+        <button onclick="clearTrace()">CLEAR PATHS</button>
+    </div>
+    <div style="font-size: 9px; opacity: 0.6;">* Gesture: Bring hands together to Toggle Tracing</div>
+</div>
 
 <script src="ew_engine.js"></script>
 <script>
-const videoElement = document.getElementById('input_video');
+let isTracing = false;
+let traceOpacity = 0.5;
+const traceHistory = []; // Stores path points
+
+const opacitySlider = document.getElementById('opacity-slider');
+opacitySlider.oninput = (e) => traceOpacity = e.target.value;
+
+function toggleTrace() {
+    isTracing = !isTracing;
+    const btn = document.getElementById('btn-trace');
+    const dot = document.getElementById('rec-dot');
+    btn.innerText = isTracing ? "STOP TRACING" : "START TRACING";
+    btn.className = isTracing ? "active" : "";
+    dot.className = isTracing ? "dot rec" : "dot";
+    document.getElementById('status-text').innerText = isTracing ? "TRACING ACTIVE" : "GESTURE READY";
+}
+
+function clearTrace() {
+    traceHistory.length = 0;
+}
+
+// Integration with Pose Loop
+const videoElement = document.createElement('video');
 const canvasElement = document.getElementById('output_canvas');
 const ctx = canvasElement.getContext('2d');
 
 const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
-pose.setOptions({ modelComplexity: 2, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+pose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
 
 pose.onResults((results) => {
-    canvasElement.width = videoElement.videoWidth;
-    canvasElement.height = videoElement.videoHeight;
+    canvasElement.width = window.innerWidth;
+    canvasElement.height = window.innerHeight;
     ctx.save();
     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    
+    // Draw Video Feed
+    ctx.globalAlpha = 1.0;
     ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
     if (results.poseLandmarks) {
-        const ewData = calculateEWMN(results.poseLandmarks);
-        drawInterface(results.poseLandmarks, ewData);
-        updateText(ewData);
+        const landmarks = results.poseLandmarks;
+        
+        // 1. GESTURE ACTIVATION CHECK
+        // Trigger: Right Hand (16) and Left Hand (15) close proximity
+        const dist = Math.hypot(landmarks[15].x - landmarks[16].x, landmarks[15].y - landmarks[16].y);
+        if (dist < 0.05) { // Cooldown/debounce logic would be added in production
+            if (!this.lastGestureTime || Date.now() - this.lastGestureTime > 2000) {
+                toggleTrace();
+                this.lastGestureTime = Date.now();
+            }
+        }
+
+        // 2. RECORD TRACE
+        if (isTracing) {
+            traceHistory.push({
+                r: { x: landmarks[16].x * canvasElement.width, y: landmarks[16].y * canvasElement.height },
+                l: { x: landmarks[15].x * canvasElement.width, y: landmarks[15].y * canvasElement.height },
+                time: Date.now()
+            });
+            if (traceHistory.length > 500) traceHistory.shift(); // Keep buffer sane
+        }
+
+        // 3. DRAW TRACE (with Transparency)
+        ctx.globalAlpha = traceOpacity;
+        ctx.lineWidth = 3;
+        
+        // Right path
+        ctx.strokeStyle = "#ff4444";
+        ctx.beginPath();
+        traceHistory.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(pt.r.x, pt.r.y);
+            else ctx.lineTo(pt.r.x, pt.r.y);
+        });
+        ctx.stroke();
+
+        // Left path
+        ctx.strokeStyle = "#ffff00";
+        ctx.beginPath();
+        traceHistory.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(pt.l.x, pt.l.y);
+            else ctx.lineTo(pt.l.x, pt.l.y);
+        });
+        ctx.stroke();
+
+        // 4. DRAW CURRENT SKELETON
+        ctx.globalAlpha = 1.0;
+        const ewData = calculateEWMN(landmarks);
+        drawMarkers(landmarks, ewData); // From previous code
     }
     ctx.restore();
 });
 
-function drawInterface(landmarks, data) {
-    // 1. Draw "Origin Crosshair" on Sternum
-    const ox = data.origin.x * canvasElement.width;
-    const oy = data.origin.y * canvasElement.height;
-    
-    ctx.strokeStyle = '#00ffcc';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(ox, oy, 30 * data.scale * 10, 0, Math.PI * 2); // Visual sphere scales with you
-    ctx.moveTo(ox - 20, oy); ctx.lineTo(ox + 20, oy);
-    ctx.moveTo(ox, oy - 20); ctx.lineTo(ox, oy + 20);
-    ctx.stroke();
-
-    // 2. Draw Limb Vectors
-    const limbs = [
-        {s: 14, e: 16, color: '#ff4444'}, // Right
-        {s: 13, e: 15, color: '#ffff00'}  // Left
-    ];
-    
-    limbs.forEach(l => {
-        const start = landmarks[l.s];
-        const end = landmarks[l.e];
-        ctx.beginPath();
-        ctx.moveTo(start.x * canvasElement.width, start.y * canvasElement.height);
-        ctx.lineTo(end.x * canvasElement.width, end.y * canvasElement.height);
-        ctx.strokeStyle = l.color;
-        ctx.lineWidth = 5;
-        ctx.stroke();
-    });
-}
-
-function updateText(data) {
-    document.getElementById('scale-val').innerText = data.scale.toFixed(3);
-    document.getElementById('r-val').innerText = `H${data.right.ewmn.h} V${data.right.ewmn.v}`;
-    document.getElementById('l-val').innerText = `H${data.left.ewmn.h} V${data.left.ewmn.v}`;
-    document.getElementById('tracking-status').innerText = "CALIBRATED & TRACKING";
-    
-    // Proximity Warning
-    document.getElementById('recalibrate-flash').style.display = data.scale > 0.4 ? 'block' : 'none';
-}
-
 const camera = new Camera(videoElement, {
-    onFrame: async () => { await pose.send({image: videoElement}); },
-    width: 1280, height: 720
+    onFrame: async () => { await pose.send({image: videoElement}); }
 });
 camera.start();
 </script>
