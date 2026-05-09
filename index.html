@@ -9,14 +9,46 @@
         body { margin: 0; background: #000; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
         canvas { width: 100vw; height: 100vh; transform: scaleX(-1); position: absolute; top: 0; left: 0; }
         #ui-overlay { position: relative; z-index: 10; pointer-events: none; height: 100vh; padding: 20px; }
-        #start-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; }
+        #start-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; transition: transform 0.1s; }
+        
+        /* Button Feedback Styles */
+        button { 
+            background: transparent; 
+            border: 1px solid #00ffcc; 
+            color: #00ffcc; 
+            padding: 8px; 
+            cursor: pointer; 
+            flex: 1; 
+            margin: 2px; 
+            transition: all 0.1s ease;
+            outline: none;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+
+        button:hover { background: rgba(0, 255, 204, 0.1); }
+        
+        /* Tactical "Press" Effect */
+        button:active { 
+            transform: scale(0.95); 
+            background: #00ffcc !important; 
+            color: #000 !important; 
+        }
+
+        /* Active Mode Style */
+        .btn-active { 
+            background: #ffcc00 !important; 
+            color: #000 !important; 
+            border-color: #ffcc00 !important; 
+        }
+
         .panel { background: rgba(0, 10, 15, 0.9); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         td { padding: 5px 0; font-size: 24px; font-weight: bold; color: #fff; }
         .dot { height: 12px; width: 12px; border-radius: 50%; background: #444; display: inline-block; margin-right: 10px; }
         .rec-active { background: #ff0000; box-shadow: 0 0 10px #ff0000; animation: blink 1s infinite; }
         #controls { position: absolute; bottom: 40px; left: 20px; width: 300px; }
-        button { background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 8px; cursor: pointer; flex: 1; margin: 2px; }
+        
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
@@ -36,22 +68,38 @@
         </div>
 
         <div id="controls" class="panel">
-    <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; font-weight: bold; margin-bottom: 10px;">SPACEWISE MODE</button>
-    <label style="font-size: 10px;">TRACE OPACITY</label>
-    <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%;">
-    <div style="display:flex;">
-        <button onclick="isTracking = true">START</button>
-        <button onclick="isTracking = false">STOP</button>
-        <button onclick="clearTraces()">RESET</button>
+            <button id="mode-toggle" onclick="toggleMode()" style="width: 100%; font-weight: bold; margin-bottom: 10px;">SPACEWISE MODE</button>
+            <label style="font-size: 10px; color:#00ffcc;">TRACE OPACITY</label>
+            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%; accent-color:#00ffcc;">
+            <div style="display:flex;">
+                <button id="btn-start" onclick="setTracking(true)">START</button>
+                <button id="btn-stop" onclick="setTracking(false)">STOP</button>
+                <button onclick="clearTraces()">RESET</button>
+            </div>
+        </div>
     </div>
-</div>
 
     <script>
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const ctx = canvasElement.getContext('2d');
         let isTracking = false;
+        let currentMode = 'spacewise';
         let rPath = [], lPath = [];
+
+        // --- UI Logic with Feedback ---
+        function setTracking(state) {
+            isTracking = state;
+            document.getElementById('btn-start').classList.toggle('btn-active', state);
+            document.getElementById('btn-stop').classList.toggle('btn-active', !state);
+        }
+
+        function toggleMode() {
+            currentMode = (currentMode === 'spacewise') ? 'bodywise' : 'spacewise';
+            const btn = document.getElementById('mode-toggle');
+            btn.innerText = currentMode.toUpperCase() + " MODE";
+            btn.classList.toggle('btn-active', currentMode === 'bodywise');
+        }
 
         // 1. Initialize Pose
         const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
@@ -70,11 +118,10 @@
             return { right: process(lm[12], lm[16]), left: process(lm[11], lm[15]) };
         }
 
-        // 3. Define Gestures (Thumb Up/Down/Clap) [cite: 14, 15, 16, 17]
         function handleGestures(lm) {
-            if (lm[22].y < lm[21].y - 0.04) isTracking = true; // Thumb Up
-            if (lm[22].y > lm[21].y + 0.04) isTracking = false; // Thumb Down
-            if (Math.hypot(lm[15].x - lm[16].x, lm[15].y - lm[16].y) < 0.06) clearTraces(); // Clap
+            if (lm[22].y < lm[21].y - 0.04) setTracking(true); 
+            if (lm[22].y > lm[21].y + 0.04) setTracking(false);
+            if (Math.hypot(lm[15].x - lm[16].x, lm[15].y - lm[16].y) < 0.06) clearTraces();
         }
 
         function clearTraces() { rPath = []; lPath = []; }
@@ -90,7 +137,6 @@
             const data = calculateEWMN(lm);
             handleGestures(lm);
 
-            // Update HUD [cite: 18, 19]
             document.getElementById('rh').innerText = `H${data.right.h}`;
             document.getElementById('rv').innerText = `V${data.right.v}`;
             document.getElementById('lh').innerText = `H${data.left.h}`;
@@ -98,13 +144,11 @@
             document.getElementById('raw-angles').innerText = `R: ${data.right.raw} | L: ${data.left.raw}`;
             document.getElementById('rec-dot').className = isTracking ? 'dot rec-active' : 'dot';
 
-            // Tracing Logic [cite: 20, 21]
             if (isTracking) {
                 rPath.push({x: lm[16].x * canvasElement.width, y: lm[16].y * canvasElement.height});
                 lPath.push({x: lm[15].x * canvasElement.width, y: lm[15].y * canvasElement.height});
             }
 
-            // Render Traces
             ctx.globalAlpha = document.getElementById('opacity-slider').value;
             ctx.lineWidth = 4; ctx.lineCap = 'round';
             const drawP = (path, color) => { 
@@ -115,14 +159,12 @@
             };
             drawP(rPath, '#ff4444'); drawP(lPath, '#ffee00');
             
-            // Draw Limb Vectors [cite: 22]
             ctx.globalAlpha = 1; ctx.lineWidth = 6;
             ctx.strokeStyle = '#ff4444'; ctx.beginPath(); ctx.moveTo(lm[12].x*canvasElement.width, lm[12].y*canvasElement.height); ctx.lineTo(lm[16].x*canvasElement.width, lm[16].y*canvasElement.height); ctx.stroke();
             ctx.strokeStyle = '#ffee00'; ctx.beginPath(); ctx.moveTo(lm[11].x*canvasElement.width, lm[11].y*canvasElement.height); ctx.lineTo(lm[15].x*canvasElement.width, lm[15].y*canvasElement.height); ctx.stroke();
             ctx.restore();
         });
 
-        // 5. Camera Setup
         const camera = new Camera(videoElement, { 
             onFrame: async () => { await pose.send({image: videoElement}); }, 
             width: 1280, height: 720 
