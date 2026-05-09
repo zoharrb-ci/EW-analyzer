@@ -2,55 +2,47 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>EWMN Movement Analyzer</title>
+    <title>EWMN Absolute-Spacewise Analyzer</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    
     <style>
         body { margin: 0; background: #000; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
         canvas { width: 100vw; height: 100vh; transform: scaleX(-1); position: absolute; top: 0; left: 0; }
         #ui-overlay { position: relative; z-index: 10; pointer-events: none; height: 100vh; padding: 20px; }
-        
-        #start-prompt { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000;
-            font-weight: bold; cursor: pointer; border: none; border-radius: 5px; font-size: 1.2em;
-        }
-
-        .panel { background: rgba(0, 20, 25, 0.85); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
-        #status-bar { display: flex; align-items: center; font-size: 14px; margin-bottom: 20px; }
-        .dot { height: 12px; width: 12px; border-radius: 50%; background: #444; margin-right: 10px; }
-        .active-dot { background: #00ffcc; box-shadow: 0 0 8px #00ffcc; }
-        
+        #start-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000; font-weight: bold; cursor: pointer; border: none; border-radius: 5px; }
+        .panel { background: rgba(0, 10, 15, 0.9); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th { text-align: left; font-size: 10px; color: #008888; border-bottom: 1px solid #004444; }
-        td { padding: 8px 0; font-size: 22px; font-weight: bold; color: #fff; }
-        
+        td { padding: 5px 0; font-size: 24px; font-weight: bold; color: #fff; }
+        .dot { height: 12px; width: 12px; border-radius: 50%; background: #444; display: inline-block; margin-right: 10px; }
+        .rec-active { background: #ff0000; box-shadow: 0 0 10px #ff0000; animation: blink 1s infinite; }
         #controls { position: absolute; bottom: 40px; left: 20px; width: 300px; }
+        button { background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 8px; cursor: pointer; flex: 1; margin: 2px; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
-
     <canvas id="output_canvas"></canvas>
     <video id="input_video" style="display:none;"></video>
-    
-    <button id="start-prompt" onclick="initEngine()">ACTIVATE EWMN ENGINE</button>
+    <button id="start-prompt" onclick="initEngine()">START ANALYZER</button>
 
     <div id="ui-overlay">
-        <div id="status-bar">
-            <div class="dot" id="status-dot"></div>
-            <div id="status-text">OFFLINE</div>
+        <div class="panel" style="width: 250px;">
+            <div id="status"><span class="dot" id="rec-dot"></span><span id="status-text">SYSTEM READY</span></div>
+            <table>
+                <tr><td style="color:#ff4444; font-size: 14px;">R. ARM</td><td id="rh">-</td><td id="rv">-</td></tr>
+                <tr><td style="color:#ffee00; font-size: 14px;">L. ARM</td><td id="lh">-</td><td id="lv">-</td></tr>
+            </table>
+            <div id="raw-angles" style="font-size: 10px; color: #008888; margin-top: 5px;">H_deg | V_deg</div>
         </div>
 
-        <div id="notation-matrix" class="panel" style="width: 280px; position: absolute; top: 20px; right: 20px;">
-            <div style="font-size: 11px; letter-spacing: 1px;">POLYPHONIC SCORE</div>
-            <table>
-                <thead><tr><th>LIMB</th><th>H</th><th>V</th><th>COORD</th></tr></thead>
-                <tbody>
-                    <tr><td style="color:#ff4444">R.ARM</td><td id="rh">-</td><td id="rv">-</td><td id="rd">-</td></tr>
-                    <tr><td style="color:#ffee00">L.ARM</td><td id="lh">-</td><td id="lv">-</td><td id="ld">-</td></tr>
-                </tbody>
-            </table>
+        <div id="controls" class="panel">
+            <label style="font-size: 10px;">TRACE OPACITY</label>
+            <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.6" style="width:100%; accent-color:#00ffcc;">
+            <div style="display:flex;">
+                <button onclick="isTracking = true">START</button>
+                <button onclick="isTracking = false">STOP</button>
+                <button onclick="clearTraces()">RESET</button>
+            </div>
         </div>
     </div>
 
@@ -58,115 +50,88 @@
         const videoElement = document.getElementById('input_video');
         const canvasElement = document.getElementById('output_canvas');
         const ctx = canvasElement.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const statusDot = document.getElementById('status-dot');
+        let isTracking = false;
+        let rPath = [], lPath = [];
 
-        function initEngine() {
-            document.getElementById('start-prompt').style.display = 'none';
-            statusText.innerText = "INITIALIZING SENSORS...";
-            camera.start();
-        }
+        // 1. Initialize Pose
+        const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
 
-        const pose = new Pose({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-        });
-
-        pose.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        // EWMN Spherical Logic
-        function calculateEWMN(landmarks) {
-            const processLimb = (proximal, distal) => {
-                // Vector coordinates
-                const dx = distal.x - proximal.x;
-                const dy = distal.y - proximal.y; // MediaPipe Y is down (+)
-                const dz = distal.z - proximal.z;
-
-                // Vertical (v): 0 is Nadir (down), 2 is Horizontal, 4 is Zenith (up)
-                const vRad = Math.atan2(Math.sqrt(dx*dx + dz*dz), -dy); 
-                const vDeg = vRad * (180 / Math.PI);
-                const vPos = Math.max(0, Math.min(4, Math.round(vDeg / 45)));
-
-                // Horizontal (h): 0-7 clockwise
-                const hRad = Math.atan2(dz, dx);
-                let hDeg = hRad * (180 / Math.PI);
+        // 2. Define calculation engine
+        function calculateEWMN(lm) {
+            const process = (p, d) => {
+                const dx = d.x - p.x, dy = d.y - p.y, dz = d.z - p.z;
+                const vDeg = Math.atan2(Math.sqrt(dx*dx + dz*dz), -dy) * (180/Math.PI);
+                const vPos = Math.max(0, Math.min(4, Math.round(vDeg/45)));
+                let hDeg = Math.atan2(dx, -dz) * (180/Math.PI);
                 if (hDeg < 0) hDeg += 360;
-                const hPos = Math.round(hDeg / 45) % 8;
-
-                return { h: hPos, v: vPos, raw: `${Math.round(hDeg)}°|${Math.round(vDeg)}°` };
+                return { h: Math.round(hDeg/45)%8, v: vPos, raw: `${Math.round(hDeg)}°|${Math.round(vDeg)}°` };
             };
-
-            return {
-                right: processLimb(landmarks[12], landmarks[16]),
-                left: processLimb(landmarks[11], landmarks[15])
-            };
+            return { right: process(lm[12], lm[16]), left: process(lm[11], lm[15]) };
         }
 
-        pose.onResults((results) => {
-            if (!results.image) return;
+        // 3. Define Gestures (Thumb Up/Down/Clap) [cite: 14, 15, 16, 17]
+        function handleGestures(lm) {
+            if (lm[22].y < lm[21].y - 0.04) isTracking = true; // Thumb Up
+            if (lm[22].y > lm[21].y + 0.04) isTracking = false; // Thumb Down
+            if (Math.hypot(lm[15].x - lm[16].x, lm[15].y - lm[16].y) < 0.06) clearTraces(); // Clap
+        }
+
+        function clearTraces() { rPath = []; lPath = []; }
+
+        // 4. Processing Loop
+        pose.onResults((res) => {
+            if (!res.poseLandmarks) return;
+            canvasElement.width = window.innerWidth; canvasElement.height = window.innerHeight;
+            ctx.save(); ctx.clearRect(0,0,canvasElement.width, canvasElement.height);
+            ctx.drawImage(res.image, 0,0,canvasElement.width, canvasElement.height);
             
-            statusText.innerText = "SYSTEM ACTIVE";
-            statusDot.classList.add('active-dot');
+            const lm = res.poseLandmarks;
+            const data = calculateEWMN(lm);
+            handleGestures(lm);
 
-            canvasElement.width = window.innerWidth;
-            canvasElement.height = window.innerHeight;
+            // Update HUD [cite: 18, 19]
+            document.getElementById('rh').innerText = `H${data.right.h}`;
+            document.getElementById('rv').innerText = `V${data.right.v}`;
+            document.getElementById('lh').innerText = `H${data.left.h}`;
+            document.getElementById('lv').innerText = `V${data.left.v}`;
+            document.getElementById('raw-angles').innerText = `R: ${data.right.raw} | L: ${data.left.raw}`;
+            document.getElementById('rec-dot').className = isTracking ? 'dot rec-active' : 'dot';
 
-            ctx.save();
-            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            
-            // Mirror background
-            ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-
-            if (results.poseLandmarks) {
-                const landmarks = results.poseLandmarks;
-                const ewData = calculateEWMN(landmarks);
-
-                // Update UI Table
-                document.getElementById('rh').innerText = ewData.right.h;
-                document.getElementById('rv').innerText = ewData.right.v;
-                document.getElementById('rd').innerText = ewData.right.raw;
-
-                document.getElementById('lh').innerText = ewData.left.h;
-                document.getElementById('lv').innerText = ewData.left.v;
-                document.getElementById('ld').innerText = ewData.left.raw;
-
-                // Visual Overlay
-                drawStickFigure(ctx, landmarks);
+            // Tracing Logic [cite: 20, 21]
+            if (isTracking) {
+                rPath.push({x: lm[16].x * canvasElement.width, y: lm[16].y * canvasElement.height});
+                lPath.push({x: lm[15].x * canvasElement.width, y: lm[15].y * canvasElement.height});
             }
+
+            // Render Traces
+            ctx.globalAlpha = document.getElementById('opacity-slider').value;
+            ctx.lineWidth = 4; ctx.lineCap = 'round';
+            const drawP = (path, color) => { 
+                if(path.length < 2) return; 
+                ctx.beginPath(); ctx.strokeStyle = color; 
+                ctx.moveTo(path[0].x, path[0].y); 
+                for(let pt of path) ctx.lineTo(pt.x, pt.y); ctx.stroke(); 
+            };
+            drawP(rPath, '#ff4444'); drawP(lPath, '#ffee00');
+            
+            // Draw Limb Vectors [cite: 22]
+            ctx.globalAlpha = 1; ctx.lineWidth = 6;
+            ctx.strokeStyle = '#ff4444'; ctx.beginPath(); ctx.moveTo(lm[12].x*canvasElement.width, lm[12].y*canvasElement.height); ctx.lineTo(lm[16].x*canvasElement.width, lm[16].y*canvasElement.height); ctx.stroke();
+            ctx.strokeStyle = '#ffee00'; ctx.beginPath(); ctx.moveTo(lm[11].x*canvasElement.width, lm[11].y*canvasElement.height); ctx.lineTo(lm[15].x*canvasElement.width, lm[15].y*canvasElement.height); ctx.stroke();
             ctx.restore();
         });
 
-        function drawStickFigure(ctx, lm) {
-            const w = canvasElement.width;
-            const h = canvasElement.height;
-
-            const drawLine = (p1, p2, color, width=3) => {
-                ctx.beginPath();
-                ctx.strokeStyle = color;
-                ctx.lineWidth = width;
-                ctx.moveTo(p1.x * w, p1.y * h);
-                ctx.lineTo(p2.x * w, p2.y * h);
-                ctx.stroke();
-            };
-
-            // V4 Spine (Shoulders to Hips center)
-            const sMid = { x: (lm[11].x + lm[12].x)/2, y: (lm[11].y + lm[12].y)/2 };
-            const hMid = { x: (lm[23].x + lm[24].x)/2, y: (lm[23].y + lm[24].y)/2 };
-            drawLine(sMid, hMid, '#00ffcc', 2);
-
-            // Arm Vectors
-            drawLine(lm[12], lm[16], '#ff4444', 5); // Right
-            drawLine(lm[11], lm[15], '#ffee00', 5); // Left
-        }
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => { await pose.send({image: videoElement}); },
-            width: 1280, height: 720
+        // 5. Camera Setup
+        const camera = new Camera(videoElement, { 
+            onFrame: async () => { await pose.send({image: videoElement}); }, 
+            width: 1280, height: 720 
         });
+
+        function initEngine() {
+            document.getElementById('start-prompt').style.display = 'none';
+            camera.start();
+        }
     </script>
 </body>
 </html>
