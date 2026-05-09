@@ -3,47 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EWMN Movement Analyzer</title>
-    <style>
-        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        #container { position: relative; width: 100vw; height: 100vh; background: #000; }
-        #input_video { display: none; } 
-        #output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
-        #hud { 
-            position: absolute; right: 20px; top: 20px; width: 300px;
-            background: rgba(0,0,0,0.85); color: #0f0; padding: 20px; 
-            font-family: 'Courier New', monospace; border: 2px solid #0f0;
-            z-index: 10;
-        }
-        .calib-msg { font-size: 0.85em; color: #ffae00; margin: 10px 0; line-height: 1.4; }
-        hr { border: 0; border-top: 1px solid #333; margin: 15px 0; }
-    </style>
-</head>
-<body>
-    <div id="container">
-        <video id="input_video"></video>
-        <canvas id="output_canvas"></canvas>
-        <div id="hud">
-            <h3 style="margin:0 0 10px 0; border-bottom: 1px solid #0f0;">EWMN ANALYZER</h3>
-            <div id="status" style="font-weight:bold; padding: 5px;">STATUS: INITIALIZING...</div>
-            
-            <div id="calib_instruction" class="calib-msg">
-                <strong>CALIBRATION REQUIRED:</strong><br>
-                Stand 3m back. Hold arms out to sides (H2/H6) parallel to floor.
-            </div>
-
-            <hr>
-            <div id="r_hand" style="font-size: 1.2em; margin-bottom: 5px;">R-ARM: H - | V -</div>
-            <div id="l_hand" style="font-size: 1.2em;">L-ARM: H - | V -</div>
-        </div>
-    </div>
-
+    <title>EWMN Movement Engine - Research Studio</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    
+    <style>
+        body { margin: 0; background: #1a1a1a; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        
+        #container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        
+        canvas { width: 100%; height: auto; display: block; }
 
-    <script src="ew_engine.js"></script>
-    <script src="ui_renderer.js"></script>
-    <script src="camera_module.js"></script>
+        /* HUD Overlay */
+        #hud {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Control Panel */
+        #controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+        }
+
+        button#sorToggle {
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,255,204,0.3);
+            transition: all 0.2s;
+        }
+
+        button#sorToggle:hover { background: #00cca3; transform: scale(1.05); }
+
+        /* Data Tables */
+        .data-panel {
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid #444;
+            padding: 12px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+        }
+
+        table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 11px; }
+        th { text-align: left; padding-bottom: 8px; border-bottom: 1px solid #333; opacity: 0.8; }
+        td { padding: 4px 0; }
+
+        .highlight-ew { color: #00ffcc; font-weight: bold; font-size: 13px; }
+        .status-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div id="container">
+    <video id="input_video" style="display:none;"></video>
+    <canvas id="output_canvas"></canvas>
+
+    <div id="controls">
+        <button id="sorToggle" onclick="handleToggle()">SoR: ABSOLUTE</button>
+    </div>
+
+    <div id="hud">
+        <div id="status_panel" class="data-panel">
+            <span class="status-badge">Engine Status:</span>
+            <div id="status">WAITING FOR CAMERA...</div>
+        </div>
+
+        <div id="data_display" class="data-panel">
+            <div style="opacity: 0.5; font-style: italic;">Awaiting movement...</div>
+        </div>
+    </div>
+</div>
+
+<script src="ew_engine.js"></script>
+<script src="ui_renderer.js"></script>
+
+<script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    // Handle SoR Toggle through the engine
+    function handleToggle() {
+        const currentMode = toggleSoR(); // Calls function in ew_engine.js
+        document.getElementById('sorToggle').innerText = `SoR: ${currentMode.toUpperCase()}`;
+    }
+
+    const pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
+
+    pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+
+    pose.onResults((results) => {
+        // 1. Process Raw Data through EWMN Engine
+        const ewData = calculateEWMN(results.poseLandmarks);
+
+        // 2. Render UI Overlays
+        updateHUD(ewData);
+
+        // 3. Draw Visualizations on Canvas
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        drawScene(results, canvasCtx, canvasElement, ewData);
+    });
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await pose.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+    });
+    camera.start();
+</script>
+
 </body>
 </html>

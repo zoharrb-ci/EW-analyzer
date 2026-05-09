@@ -1,28 +1,30 @@
 /**
- * EWMN Clockwise Logic Engine - User Perspective
+ * EWMN Engine with SoR Toggle Support
  */
 
-let maxLimbLength = { right: 0.1, left: 0.1 };
-let isCalibrated = { right: false, left: false };
+let sorMode = "absolute"; // Global state
+
+function toggleSoR() {
+    const btn = document.getElementById('sorToggle');
+    sorMode = (sorMode === "absolute") ? "bodywise" : "absolute";
+    btn.innerText = `Current SoR: ${sorMode.toUpperCase()}`;
+}
 
 function calculateEWMN(landmarks) {
     if (!landmarks) return null;
 
-    const bodyCenter = {
-        x: (landmarks[11].x + landmarks[12].x) / 2,
-        y: (landmarks[11].y + landmarks[12].y) / 2,
-        z: (landmarks[11].z + landmarks[12].z) / 2
-    };
+    // Calculate Body Orientation for Body-wise SoR
+    // Using shoulders (11, 12) to determine the "Front" of the mover
+    const shoulderL = landmarks[11];
+    const shoulderR = landmarks[12];
+    
+    // Vector representing the chest plane
+    const bodyAzimuth = Math.atan2(shoulderR.x - shoulderL.x, shoulderR.z - shoulderL.z);
+    // Offset by 90 degrees to get the perpendicular "Front"
+    const frontOffset = bodyAzimuth + (Math.PI / 2);
 
-    const results = { 
-        allCalibrated: isCalibrated.right && isCalibrated.left,
-        right: null, left: null, center: bodyCenter 
-    };
-
-    const limbs = [
-        { name: 'right', s: 14, e: 16 }, 
-        { name: 'left', s: 13, e: 15 }
-    ];
+    const results = { sorMode: sorMode, right: null, left: null };
+    const limbs = [{ name: 'right', s: 12, e: 16 }, { name: 'left', s: 11, e: 15 }];
 
     limbs.forEach(limb => {
         const joint = landmarks[limb.s];
@@ -30,42 +32,27 @@ function calculateEWMN(landmarks) {
 
         const dx = extremity.x - joint.x;
         const dy = extremity.y - joint.y;
-        const dz_raw = extremity.z - joint.z;
+        const dz = extremity.z - joint.z;
 
-        const currentLength2D = Math.sqrt(dx * dx + dy * dy);
-        if (currentLength2D > maxLimbLength[limb.name]) {
-            maxLimbLength[limb.name] = currentLength2D;
-            if (currentLength2D > 0.12) isCalibrated[limb.name] = true;
+        // --- HORIZONTAL CALCULATION ---
+        let hRad = Math.atan2(-dx, -dz);
+        
+        // If Body-wise, subtract the body's rotation from the limb's rotation
+        if (sorMode === "bodywise") {
+            hRad -= frontOffset;
         }
 
-        let dz = 0;
-        const L = maxLimbLength[limb.name];
-        if (L > currentLength2D) {
-            dz = Math.sqrt(Math.pow(L, 2) - Math.pow(dx, 2) - Math.pow(dy, 2)) || 0;
-        }
-        const finalDz = (dz_raw > 0) ? dz : -dz;
+        let hDeg = (hRad * (180 / Math.PI) + 360) % 360;
+        let hPos = Math.round(hDeg / 45) % 8;
 
-        // --- HORIZONTAL (Camera = 0, CW increase from User POV) ---
-        // Mirror adjustment for user perspective: -dx
-        let hAngleRaw = (Math.atan2(-dx, -finalDz) * (180 / Math.PI) + 180) % 360;
-        let hPos = Math.round(hAngleRaw / 45) % 8;
-
-        // --- VERTICAL (Floor = 0, CW increase toward Ceiling/Back) ---
-        // dy is positive downward; we invert to make Floor 0 and Upward 180
-        let vAngleRaw = Math.atan2(-dy, Math.sqrt(dx*dx + finalDz*finalDz)) * (180 / Math.PI) + 90;
-        let vPos = Math.round(vAngleRaw / 45);
-        vPos = Math.max(0, Math.min(4, vPos));
-
-        const isWristSupporting = extremity.y > 0.85; 
-        const weightStatus = isWristSupporting ? "HEAVY-BASE" : "HEAVY-HANGING";
+        // --- VERTICAL CALCULATION (0=Floor, 4=Ceiling) ---
+        const horizontalDist = Math.sqrt(dx*dx + dz*dz);
+        let vDeg = Math.atan2(-dy, horizontalDist) * (180 / Math.PI) + 90;
+        let vPos = Math.max(0, Math.min(4, Math.round(vDeg / 45)));
 
         results[limb.name] = {
-            h: hPos, v: vPos,
-            hDeg: Math.round(hAngleRaw),
-            vDeg: Math.round(vAngleRaw),
-            weight: weightStatus,
-            isBase: isWristSupporting,
-            calibrated: isCalibrated[limb.name]
+            vector: { x: dx.toFixed(2), y: dy.toFixed(2), z: dz.toFixed(2) },
+            ewmn: { h: hPos, v: vPos, hDeg: Math.round(hDeg), vDeg: Math.round(vDeg) }
         };
     });
 

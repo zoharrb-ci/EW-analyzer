@@ -3,23 +3,26 @@
  */
 
 function updateHUD(ewData) {
-    const rDiv = document.getElementById('r_hand');
-    const lDiv = document.getElementById('l_hand');
-    const statusDiv = document.getElementById('status');
+    const displayDiv = document.getElementById('data_display');
+    if (!ewData) return;
 
-    if (ewData) {
-        if (ewData.allCalibrated) {
-            statusDiv.innerHTML = "STATUS: <span style='color:#0f0'>CALIBRATED</span>";
-        }
+    displayDiv.innerHTML = `
+        <div style="background: rgba(0,0,0,0.7); color: white; padding: 10px; font-family: monospace;">
+            <table style="width:100%; border-bottom: 1px solid #444; margin-bottom: 10px;">
+                <tr><th colspan="4" style="text-align:left;">PHYSICS (Vector Δ)</th></tr>
+                <tr style="opacity:0.7;"><td>Limb</td><td>X</td><td>Y</td><td>Z</td></tr>
+                <tr><td>Right</td><td>${ewData.right.vector.x}</td><td>${ewData.right.vector.y}</td><td>${ewData.right.vector.z}</td></tr>
+                <tr><td>Left</td><td>${ewData.left.vector.x}</td><td>${ewData.left.vector.y}</td><td>${ewData.left.vector.z}</td></tr>
+            </table>
 
-        // Clean display: Coordinates | Degrees | Polarity
-        if (ewData.right) {
-            rDiv.innerHTML = `<span style="color:#FF0000">H${ewData.right.h} V${ewData.right.v} | ${ewData.right.hDeg}° ${ewData.right.vDeg}° | ${ewData.right.weight}</span>`;
-        }
-        if (ewData.left) {
-            lDiv.innerHTML = `<span style="color:#FFFF00">H${ewData.left.h} V${ewData.left.v} | ${ewData.left.hDeg}° ${ewData.left.vDeg}° | ${ewData.left.weight}</span>`;
-        }
-    }
+            <table style="width:100%; color: #00ffcc;">
+                <tr><th colspan="3" style="text-align:left;">NOTATION (${ewData.sorMode})</th></tr>
+                <tr style="opacity:0.7;"><td>Limb</td><td>(h) (v)</td><td>Raw Deg</td></tr>
+                <tr><td>Right</td><td>(${ewData.right.ewmn.h}) (${ewData.right.ewmn.v})</td><td>${ewData.right.ewmn.hDeg}°|${ewData.right.ewmn.vDeg}°</td></tr>
+                <tr><td>Left</td><td>(${ewData.left.ewmn.h}) (${ewData.left.ewmn.v})</td><td>${ewData.left.ewmn.hDeg}°|${ewData.left.ewmn.vDeg}°</td></tr>
+            </table>
+        </div>
+    `;
 }
 
 function drawScene(results, ctx, canvas, ewData) {
