@@ -2,48 +2,35 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>EWMN Live Analyzer</title>
+    <title>EWMN movement analyzer</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     
     <style>
         body { margin: 0; background: #000; color: #00ffcc; font-family: 'Courier New', monospace; overflow: hidden; }
-        
-        /* The Video/Drawing Layer */
         canvas { width: 100vw; height: 100vh; transform: scaleX(-1); position: absolute; top: 0; left: 0; }
-
-        /* The Fixed UI Layer (Higher Z-Index) */
         #ui-overlay { position: relative; z-index: 10; pointer-events: none; height: 100vh; padding: 20px; }
         
-        .panel { 
-            background: rgba(0, 20, 25, 0.85); 
-            border: 1px solid #00ffcc; 
-            padding: 15px; 
-            pointer-events: auto; /* Re-enable clicking for buttons/sliders */
-            border-radius: 4px;
-            margin-bottom: 20px;
+        /* The Power Button (Crucial for starting camera in modern browsers) */
+        #start-prompt { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            pointer-events: auto; padding: 20px 40px; background: #00ffcc; color: #000;
+            font-weight: bold; cursor: pointer; border: none; border-radius: 5px; font-size: 1.2em;
         }
 
-        /* Status Bar */
+        .panel { background: rgba(0, 20, 25, 0.85); border: 1px solid #00ffcc; padding: 15px; pointer-events: auto; border-radius: 4px; }
         #status-bar { display: flex; align-items: center; font-size: 14px; margin-bottom: 20px; }
         .dot { height: 12px; width: 12px; border-radius: 50%; background: #444; margin-right: 10px; }
         .rec { background: #ff0000; box-shadow: 0 0 8px #ff0000; animation: blink 1s infinite; }
-
-        /* Notation Table */
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th { text-align: left; font-size: 10px; color: #008888; border-bottom: 1px solid #004444; }
         td { padding: 8px 0; font-size: 18px; font-weight: bold; color: #fff; }
-        .label-r { color: #ff4444; } .label-l { color: #ffee00; }
-
-        /* Controls */
+        
         #controls { position: absolute; bottom: 40px; left: 20px; width: 300px; }
-        input[type=range] { width: 100%; accent-color: #00ffcc; cursor: pointer; }
-        button { 
-            background: transparent; border: 1px solid #00ffcc; color: #00ffcc; 
-            padding: 8px; cursor: pointer; font-family: inherit; width: 100%; margin-top: 10px;
-        }
-        button:active { background: #00ffcc; color: #000; }
-
+        input[type=range] { width: 100%; accent-color: #00ffcc; }
+        button { background: transparent; border: 1px solid #00ffcc; color: #00ffcc; padding: 8px; cursor: pointer; font-family: inherit; width: 100%; margin-top: 5px; }
+        
         @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
     </style>
 </head>
@@ -51,39 +38,73 @@
 
     <canvas id="output_canvas"></canvas>
     <video id="input_video" style="display:none;"></video>
+    
+    <button id="start-prompt" onclick="initEngine()">ACTIVATE SYSTEM</button>
 
     <div id="ui-overlay">
-        
         <div id="status-bar">
             <div class="dot" id="rec-dot"></div>
-            <div id="status-text">INITIALIZING SENSORS...</div>
+            <div id="status-text">OFFLINE</div>
         </div>
 
         <div id="notation-matrix" class="panel" style="width: 280px; position: absolute; top: 20px; right: 20px;">
-            <div style="font-size: 11px; letter-spacing: 1px;">POLYPHONIC SCORE</div>
+            <div style="font-size: 11px;">EWMN NOTATION MATRIX</div>
             <table>
-                <thead>
-                    <tr><th>LIMB</th><th>H</th><th>V</th><th>COORD</th></tr>
-                </thead>
+                <thead><tr><th>LIMB</th><th>H</th><th>V</th><th>DEG</th></tr></thead>
                 <tbody>
-                    <tr><td class="label-r">R.ARM</td><td id="rh">-</td><td id="rv">-</td><td id="rd">-</td></tr>
-                    <tr><td class="label-l">L.ARM</td><td id="lh">-</td><td id="lv">-</td><td id="ld">-</td></tr>
+                    <tr><td style="color:red">R.ARM</td><td id="rh">-</td><td id="rv">-</td><td id="rd">-</td></tr>
+                    <tr><td style="color:yellow">L.ARM</td><td id="lh">-</td><td id="lv">-</td><td id="ld">-</td></tr>
                 </tbody>
             </table>
         </div>
 
         <div id="controls" class="panel">
-            <label style="font-size: 10px;">TRACE OPACITY</label>
+            <label style="font-size: 10px;">TRACE TRANSPARENCY</label>
             <input type="range" id="opacity-slider" min="0" max="1" step="0.1" value="0.5">
             <button id="btn-trace" onclick="toggleTrace()">START TRACING</button>
-            <button onclick="clearTrace()" style="border-color: #555; color: #888;">CLEAR PATHS</button>
         </div>
-
     </div>
 
-    <script src="ew_engine.js"></script>
     <script>
-        // Place your pose.onResults logic here as shown in previous responses
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const ctx = canvasElement.getContext('2d');
+        const statusText = document.getElementById('status-text');
+
+        function initEngine() {
+            document.getElementById('start-prompt').style.display = 'none';
+            statusText.innerText = "STARTING CAMERA...";
+            camera.start();
+        }
+
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true });
+
+        pose.onResults((results) => {
+            if (!results.image) return;
+            statusText.innerText = "SENSORS ACTIVE";
+            
+            canvasElement.width = window.innerWidth;
+            canvasElement.height = window.innerHeight;
+
+            ctx.save();
+            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                // Update your Table values here based on your ew_engine logic
+                // Example: document.getElementById('rh').innerText = calculatedH;
+            }
+            ctx.restore();
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await pose.send({image: videoElement}); },
+            width: 1280, height: 720
+        });
     </script>
 </body>
 </html>
