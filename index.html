@@ -2,141 +2,106 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EWMN Movement Engine - Research Studio</title>
+    <title>EWMN Dynamic Analyzer</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-    
     <style>
-        body { margin: 0; background: #1a1a1a; color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
-        
-        #container { position: relative; width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-        
-        canvas { width: 100%; height: auto; display: block; }
-
-        /* HUD Overlay */
-        #hud {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 320px;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        /* Control Panel */
-        #controls {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-        }
-
-        button#sorToggle {
-            background: #00ffcc;
-            color: #000;
-            border: none;
-            padding: 12px 24px;
-            font-weight: bold;
-            border-radius: 5px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0,255,204,0.3);
-            transition: all 0.2s;
-        }
-
-        button#sorToggle:hover { background: #00cca3; transform: scale(1.05); }
-
-        /* Data Tables */
-        .data-panel {
-            background: rgba(0, 0, 0, 0.85);
-            border: 1px solid #444;
-            padding: 12px;
-            border-radius: 8px;
-            backdrop-filter: blur(5px);
-        }
-
-        table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 11px; }
-        th { text-align: left; padding-bottom: 8px; border-bottom: 1px solid #333; opacity: 0.8; }
-        td { padding: 4px 0; }
-
-        .highlight-ew { color: #00ffcc; font-weight: bold; font-size: 13px; }
-        .status-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #aaa; }
+        body { margin: 0; background: #0a0a0a; color: #00ffcc; font-family: monospace; }
+        canvas { width: 100vw; height: 100vh; transform: scaleX(-1); }
+        #ui-layer { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+        .stats-panel { background: rgba(0,20,20,0.8); border: 1px solid #00ffcc; padding: 15px; border-radius: 5px; width: 250px; }
+        .val { color: white; font-weight: bold; font-size: 1.2em; }
+        #recalibrate-flash { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; background: rgba(255,0,0,0.5); padding: 10px; display: none; }
     </style>
 </head>
 <body>
 
-<div id="container">
-    <video id="input_video" style="display:none;"></video>
-    <canvas id="output_canvas"></canvas>
-
-    <div id="controls">
-        <button id="sorToggle" onclick="handleToggle()">SoR: ABSOLUTE</button>
-    </div>
-
-    <div id="hud">
-        <div id="status_panel" class="data-panel">
-            <span class="status-badge">Engine Status:</span>
-            <div id="status">WAITING FOR CAMERA...</div>
-        </div>
-
-        <div id="data_display" class="data-panel">
-            <div style="opacity: 0.5; font-style: italic;">Awaiting movement...</div>
-        </div>
+<div id="ui-layer">
+    <div class="stats-panel">
+        <div style="font-size: 10px; opacity: 0.7;">DYNAMIC SoR STATUS</div>
+        <div id="tracking-status">INITIATING...</div>
+        <hr style="border: 0; border-top: 1px solid #004444; margin: 10px 0;">
+        <div>SCALE: <span id="scale-val" class="val">1.00</span></div>
+        <div>RIGHT: <span id="r-val" class="val">--</span></div>
+        <div>LEFT: <span id="l-val" class="val">--</span></div>
     </div>
 </div>
 
+<div id="recalibrate-flash">DISTANCE WARNING: SUBJECT TOO CLOSE</div>
+<canvas id="output_canvas"></canvas>
+<video id="input_video" style="display:none;"></video>
+
 <script src="ew_engine.js"></script>
-<script src="ui_renderer.js"></script>
-
 <script>
-    const videoElement = document.getElementById('input_video');
-    const canvasElement = document.getElementById('output_canvas');
-    const canvasCtx = canvasElement.getContext('2d');
+const videoElement = document.getElementById('input_video');
+const canvasElement = document.getElementById('output_canvas');
+const ctx = canvasElement.getContext('2d');
 
-    // Handle SoR Toggle through the engine
-    function handleToggle() {
-        const currentMode = toggleSoR(); // Calls function in ew_engine.js
-        document.getElementById('sorToggle').innerText = `SoR: ${currentMode.toUpperCase()}`;
-    }
+const pose = new Pose({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}` });
+pose.setOptions({ modelComplexity: 2, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
-    const pose = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
+pose.onResults((results) => {
+    canvasElement.width = videoElement.videoWidth;
+    canvasElement.height = videoElement.videoHeight;
+    ctx.save();
+    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-    pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
-
-    pose.onResults((results) => {
-        // 1. Process Raw Data through EWMN Engine
+    if (results.poseLandmarks) {
         const ewData = calculateEWMN(results.poseLandmarks);
+        drawInterface(results.poseLandmarks, ewData);
+        updateText(ewData);
+    }
+    ctx.restore();
+});
 
-        // 2. Render UI Overlays
-        updateHUD(ewData);
+function drawInterface(landmarks, data) {
+    // 1. Draw "Origin Crosshair" on Sternum
+    const ox = data.origin.x * canvasElement.width;
+    const oy = data.origin.y * canvasElement.height;
+    
+    ctx.strokeStyle = '#00ffcc';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ox, oy, 30 * data.scale * 10, 0, Math.PI * 2); // Visual sphere scales with you
+    ctx.moveTo(ox - 20, oy); ctx.lineTo(ox + 20, oy);
+    ctx.moveTo(ox, oy - 20); ctx.lineTo(ox, oy + 20);
+    ctx.stroke();
 
-        // 3. Draw Visualizations on Canvas
-        canvasElement.width = videoElement.videoWidth;
-        canvasElement.height = videoElement.videoHeight;
-        drawScene(results, canvasCtx, canvasElement, ewData);
+    // 2. Draw Limb Vectors
+    const limbs = [
+        {s: 14, e: 16, color: '#ff4444'}, // Right
+        {s: 13, e: 15, color: '#ffff00'}  // Left
+    ];
+    
+    limbs.forEach(l => {
+        const start = landmarks[l.s];
+        const end = landmarks[l.e];
+        ctx.beginPath();
+        ctx.moveTo(start.x * canvasElement.width, start.y * canvasElement.height);
+        ctx.lineTo(end.x * canvasElement.width, end.y * canvasElement.height);
+        ctx.strokeStyle = l.color;
+        ctx.lineWidth = 5;
+        ctx.stroke();
     });
+}
 
-    const camera = new Camera(videoElement, {
-        onFrame: async () => {
-            await pose.send({image: videoElement});
-        },
-        width: 1280,
-        height: 720
-    });
-    camera.start();
+function updateText(data) {
+    document.getElementById('scale-val').innerText = data.scale.toFixed(3);
+    document.getElementById('r-val').innerText = `H${data.right.ewmn.h} V${data.right.ewmn.v}`;
+    document.getElementById('l-val').innerText = `H${data.left.ewmn.h} V${data.left.ewmn.v}`;
+    document.getElementById('tracking-status').innerText = "CALIBRATED & TRACKING";
+    
+    // Proximity Warning
+    document.getElementById('recalibrate-flash').style.display = data.scale > 0.4 ? 'block' : 'none';
+}
+
+const camera = new Camera(videoElement, {
+    onFrame: async () => { await pose.send({image: videoElement}); },
+    width: 1280, height: 720
+});
+camera.start();
 </script>
-
 </body>
 </html>
