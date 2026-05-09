@@ -1,0 +1,113 @@
+This documentation outlines the current technical specifications, mathematical foundations, and user interface protocols for the **EWMN (Eshkol-Wachman Movement Notation) Absolute-Spacewise Analyzer**.
+
+---
+
+## 1. System Overview
+
+The analyzer is a browser-based tool utilizing **MediaPipe Pose** to map human movement onto the Eshkol-Wachman spherical system. It operates in **Absolute-Spacewise** mode, meaning the coordinates are fixed to the room's dimensions (the camera axis) rather than the body’s orientation.
+
+### Core Capabilities:
+
+* **Real-time Spherical Mapping:** Converts limb vectors into $H$ (Horizontal) and $V$ (Vertical) coordinates.
+* **Gestural Command Layer:** Hands-free control via thumb positions and claps.
+* **Dynamic Tracing:** Visual "trails" for limbs with variable transparency.
+
+---
+
+## 2. Mathematical Framework
+
+The system treats each limb (Shoulder to Wrist) as a vector $\vec{L}$ originating from the proximal joint (Shoulder).
+
+### A. Vertical Calculation ($V$)
+
+The Vertical axis represents elevation from **Nadir** ($V0$) to **Zenith** ($V4$).
+
+* **Input:** $\Delta x, \Delta y, \Delta z$ (Relative coordinates from shoulder to wrist).
+* **Formula:**
+
+$$V_{rad} = \operatorname{atan2}\left(\sqrt{\Delta x^2 + \Delta z^2}, -\Delta y\right)$$
+
+
+* **Mapping:** * $0^\circ \to V0$ (Straight Down)
+* $90^\circ \to V2$ (Horizontal Plane)
+* $180^\circ \to V4$ (Straight Up)
+
+
+* **Quantization:** $V_{pos} = \operatorname{round}(V_{deg} / 45^\circ)$
+
+### B. Horizontal Calculation ($H$)
+
+The Horizontal axis represents direction in the transverse plane, divided into 8 segments ($0-7$).
+
+* **Convention:** $H0$ is defined as pointing directly toward the camera (Negative Z in MediaPipe).
+* **Formula:**
+
+$$H_{rad} = \operatorname{atan2}(\Delta x, -\Delta z)$$
+
+
+* **Normalization:** If $H_{deg} < 0$, then $H_{deg} = H_{deg} + 360^\circ$.
+* **Mapping:**
+* $0^\circ \to H0$ (Front / Camera)
+* $90^\circ \to H2$ (Right Side)
+* $180^\circ \to H4$ (Back / Away from Camera)
+* $270^\circ \to H6$ (Left Side)
+
+
+
+---
+
+## 3. Gestural Control Logic (Human Interface)
+
+The system eliminates the need for keyboard interaction during movement sessions via the following triggers:
+
+| Gesture | Action | Detection Logic |
+| --- | --- | --- |
+| **Right Thumb Up** | **Start Tracking** | Thumb Tip Y < Thumb Base Y (Offset: 0.04) |
+| **Right Thumb Down** | **Stop Tracking** | Thumb Tip Y > Thumb Base Y (Offset: 0.04) |
+| **Clap** | **Reset Paths** | Distance between $Wrist_L$ and $Wrist_R$ < 0.06 |
+
+---
+
+## 4. UI/UX Specifications
+
+The Interface is split into three functional layers:
+
+### A. The HUD (Heads-Up Display)
+
+* **Notation Matrix:** Displays active $H$ and $V$ digits for both limbs.
+* **System Status:** A red blinking "REC" indicator appears when tracking is active.
+* **Raw Data:** Displays fine-grain degree measurements beneath the EWMN digits.
+
+### B. Visualization Layer
+
+* **Trace Paths:** Red (Right) and Yellow (Left) paths that persist as the user moves.
+* **Opacity Slider:** Controls the alpha transparency of the traces ($0.0$ to $1.0$).
+* **Stick Figure:** High-contrast vectors connecting shoulders to wrists for immediate feedback.
+
+### C. Control Panel
+
+* **Manual Overrides:** Physical buttons for **Start**, **Stop**, and **Reset** for use with a mouse or touch-screen.
+
+---
+
+## 5. Setup & Environment
+
+* **Platform:** HTML5, CSS3, JavaScript (ES6+).
+* **Dependencies:** * `@mediapipe/pose`: Landmark detection.
+* `@mediapipe/camera_utils`: Video stream management.
+
+
+* **Operational Requirements:** * Must be served over **HTTPS** or **Localhost** for camera permissions.
+* Camera resolution: Recommended $1280 \times 720$.
+
+
+
+---
+
+## 6. Current Status Summary
+
+* [x] **Camera Integration:** Functional with user activation button.
+* [x] **Spacewise Offsets:** Corrected ($H0$ = Camera, $H4$ = Away).
+* [x] **Vertical Alignment:** Corrected ($V0$ = Down, $V4$ = Up).
+* [x] **Tracing System:** Functional with opacity control.
+* [x] **Gesture Commands:** Functional for tracking and erasing.
