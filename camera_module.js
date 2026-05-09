@@ -1,16 +1,15 @@
 /**
- * CAMERA_MODULE.JS
- * Responsible for MediaPipe initialization and Hardware Stream
+ * CAMERA_MODULE.JS - Hardware & Engine Initialization
  */
 window.pose = new Pose({
     locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
 });
 
 pose.setOptions({
-    modelComplexity: 1, // 1 for speed, 2 for precision
+    modelComplexity: 1, // Balanced for real-time performance
     smoothLandmarks: true,
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.6
 });
 
 window.camera = new Camera(document.getElementById('input_video'), {
@@ -22,6 +21,10 @@ window.camera = new Camera(document.getElementById('input_video'), {
 });
 
 window.initEngine = () => {
+    // Required to unlock AudioContext on most browsers
+    if (window.audioCtx && window.audioCtx.state === 'suspended') {
+        window.audioCtx.resume();
+    }
     document.getElementById('start-prompt').style.display = 'none';
     camera.start();
 };
